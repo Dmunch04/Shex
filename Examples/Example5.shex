@@ -1,0 +1,7 @@
+var text = "Hello World 1 2 3"
+
+var splitted = split (text, ' ')
+print (splitted)
+
+var joined = join (splitted, ', ')
+print (joined)

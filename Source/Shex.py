@@ -58,6 +58,21 @@ DefaultFunctions = {
     'isodd': {
         'Args': ['number'],
         'Body': '"isodd::number"'
+    },
+
+    'length': {
+        'Args': ['value'],
+        'Body': '"length::value"'
+    },
+
+    'split': {
+        'Args': ['string', 'factor'],
+        'Body': '"split::string::factor"'
+    },
+
+    'join': {
+        'Args': ['list', 'factor'],
+        'Body': '"join::list::factor"'
     }
 }
 
@@ -2001,6 +2016,36 @@ class Interpreter:
 
                     elif Value % 2 == 1:
                         return Result.Success (Number (1))
+
+        elif _Node.NodeToCall.VarNameToken.Value == 'length':
+            Value = DefaultFunctions['length']['Body'][1 : len (DefaultFunctions['length']['Body']) - 1]
+            Values = Value.split ('::')
+            Value = len (str (Args[0]))
+
+            if Values[0] == 'length':
+                if Values[1] == 'value':
+                    return Result.Success (Number (Value))
+
+        elif _Node.NodeToCall.VarNameToken.Value == 'split':
+            Value = DefaultFunctions['split']['Body'][1 : len (DefaultFunctions['split']['Body']) - 1]
+            Values = Value.split ('::')
+            Value = str (Args[0]).split (str (Args[1]))
+
+            if Values[0] == 'split':
+                if Values[1] == 'string':
+                    if Values[2] == 'factor':
+                        return Result.Success (List (Value))
+
+        elif _Node.NodeToCall.VarNameToken.Value == 'join':
+            Value = DefaultFunctions['join']['Body'][1 : len (DefaultFunctions['join']['Body']) - 1]
+            Values = Value.split ('::')
+            ValueList = [Element for Element in Args[0].Elements]
+            Value = str (Args[1]).join (ValueList)
+
+            if Values[0] == 'join':
+                if Values[1] == 'list':
+                    if Values[2] == 'factor':
+                        return Result.Success (String (Value))
 
         ReturnValue = Result.Register (ValueToCall.Execute (Args))
 
