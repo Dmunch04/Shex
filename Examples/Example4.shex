@@ -1,0 +1,8 @@
+isodd (5)
+isodd (4)
+
+iseven (5)
+iseven (4)
+
+var Text = read ('Example2.shex')
+print (Text)

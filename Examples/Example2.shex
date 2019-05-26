@@ -1,0 +1,1 @@
+task Test (x) -> if x then print (x) else print ('Whoops')
