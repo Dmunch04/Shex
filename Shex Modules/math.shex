@@ -1,0 +1,21 @@
+-- Place this in your scripts folder, or at:
+-- C:\Users\*User*\AppData\Local\Programs\GravPack\Lib
+-- And do:
+-- import ('math.shex')
+-- To import the functions
+
+-- Lowercased functions
+task add (x, y) -> x + y
+task subtract (x, y) -> x - y
+task multiply (x, y) -> x * y
+task divide (x, y) -> x / y
+task power (x, y) -> x ^ y
+task hypotenuse (a, b) -> "square::(a ** 2) + (b ** 2)"
+
+-- Uppercased (First letter) functions
+task Add (x, y) -> x + y
+task Subtract (x, y) -> x - y
+task Multiply (x, y) -> x * y
+task Divide (x, y) -> x / y
+task Power (x, y) -> x ^ y
+task Hypotenuse (a, b) -> "square::(a ** 2) + (b ** 2)"

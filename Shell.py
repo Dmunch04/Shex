@@ -10,7 +10,6 @@ def Run ():
 
             if Error:
                 Logs.Error (Error.AsString ())
-                return
 
             elif Result:
                 print (Result)

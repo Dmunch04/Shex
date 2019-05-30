@@ -15,6 +15,16 @@
 
 
 #######################################
+# SETUP
+#######################################
+
+import os
+import sys
+sys.path.append (os.path.abspath (os.path.dirname (__file__)))
+
+
+
+#######################################
 # IMPORTS
 #######################################
 
@@ -1596,6 +1606,20 @@ class Function (Value):
     def __repr__ (self):
         #return f"<task {self.Name}>"
         return ''
+
+class Dict (Value):
+    def __init__ (self, Elements):
+        super ().__init__ ()
+
+        self.Elements = Elements
+
+class Class (Value):
+    def __init__ (self, Name, Values, Functions):
+        super ().__init__ ()
+
+        self.Name = Name
+        self.Values = Values
+        self.Functions = Functions
 
 
 

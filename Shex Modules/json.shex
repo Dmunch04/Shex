@@ -1,0 +1,13 @@
+-- Place this in your scripts folder, or at:
+-- C:\Users\*User*\AppData\Local\Programs\GravPack\Lib
+-- And do:
+-- import ('json.shex')
+-- To import the functions
+
+-- Lowercased functions
+task load (path) -> "json::load::path"
+task loads (data) -> "json::loads::data"
+
+-- Uppercased (First letter) functions
+task Load (path) -> "json::load::path"
+task Loads (data) -> "json::loads::data"

@@ -1,0 +1,11 @@
+-- Place this in your scripts folder, or at:
+-- C:\Users\*User*\AppData\Local\Programs\GravPack\Lib
+-- And do:
+-- import ('os.shex')
+-- To import the functions
+
+-- Lowercased functions
+task getCwd () -> "get::cwd"
+
+-- Uppercased (First letter) functions
+task GetCwd () -> "get::cwd"

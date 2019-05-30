@@ -23,6 +23,5 @@ These are the functions you can use from the system module:
 | subtract | X, Y | Returns X - Y | subtract (1, 2) | -1 |
 | multiply | X, Y | Returns X * Y | multiply (1, 2) | 2 |
 | divide | X, Y | Returns X / Y | divide (1, 2) | 0,5 |
-| divide | X, Y | Returns X / Y | divide (1, 2) | 0,5 |
 | power | X, Y | Returns X ** Y (Uses the power operator: ^) | power (1, 2) | 1 |
 | check | X | Returns 1 if X is greater than 0 and 0 if X is less than or equal to 0 | check (4) | 1 |
