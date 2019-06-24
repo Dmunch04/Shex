@@ -21,3 +21,4 @@ def Run (_Path):
             print (Result)
 
 # Run ('Path/To/File.shex')
+Run ('Test.shex')

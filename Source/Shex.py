@@ -22,6 +22,17 @@ import os
 import sys
 sys.path.append (os.path.abspath (os.path.dirname (__file__)))
 
+Path = ''
+print (sys.platform)
+
+if sys.platform == 'windows':
+    Path = 'C:/Users/{}/AppData/Local/Programs/GravPack/Lib/{{}}'
+
+elif sys.platform == 'linux':
+    Path = '/home/{}/.shex/{{}}'
+
+# Add mac support
+
 
 
 #######################################
@@ -33,6 +44,8 @@ from Errors import *
 import string
 import getpass
 from DavesLogger import Logs
+
+GlobalPath = Path.format (getpass.getuser ())
 
 
 
@@ -174,30 +187,45 @@ class Position:
 # TOKENS
 #######################################
 
+# Types
 TokenInt = 'INT'
 TokenFloat = 'FLOAT'
 TokenString = 'STRING'
-TokenIdentifier = 'IDENTIFIER'
 TokenKeyword = 'KEYWORD'
+TokenIdentifier = 'IDENTIFIER'
+
+# Operators
 TokenPlus = 'PLUS'
 TokenMinus = 'MINUS'
 TokenMultiply = 'MUL'
 TokenDivide = 'DIV'
 TokenPower = 'POW'
 TokenEquals = 'EQ'
+
+# () & []
 TokenLeftParenthesis = 'LPAREN'
 TokenRightParenthesis = 'RPAREN'
 TokenLeftSquareBracket = 'LSQUARE'
 TokenRightSquareBracket = 'RSQUARE'
-TokenEqualsEquals = 'EE'
+
+# Equal Compare
 TokenNotEquals = 'NE'
+TokenEqualsEquals = 'EE'
+
+# More or Less Compare
 TokenLessThan = 'LT'
 TokenGreaterThan = 'GT'
 TokenLessThanEquals = 'LTE'
 TokenGreaterThanEquals = 'GTE'
+
+# Special
+#TokenPass = 'PASS' - I guess we're not doing it this way
 TokenComma = 'COMMA'
 TokenArrow = 'ARROW'
+
+# Other
 TokenEndOfFile = 'EOF'
+TokenIllegal = 'ILLEGAL'
 
 Keywords = [
     'var',
@@ -212,6 +240,7 @@ Keywords = [
     'step',
     'while',
     'task',
+    'object',
     'then'
 ]
 
@@ -265,7 +294,7 @@ class Lexer:
             elif self.CurrentChar in Digits:
                 Tokens.append (self.MakeNumber ())
 
-            elif self.CurrentChar in Letters:
+            elif self.CurrentChar in Letters + '.':
                 Tokens.append (self.MakeIdentifier ())
 
             elif self.CurrentChar == '"' or self.CurrentChar == "'":
@@ -326,6 +355,9 @@ class Lexer:
             elif self.CurrentChar == ',':
                 Tokens.append (Token (TokenComma, StartPosition = self.Position))
                 self.Advance ()
+
+            #elif self.CurrentChar == '.':
+                #Tokens.append (self.MakePass ())
 
             else:
                 StartPosition = self.Position.Copy ()
@@ -391,7 +423,7 @@ class Lexer:
         IdString = ''
         StartPosition = self.Position.Copy ()
 
-        while self.CurrentChar != None and self.CurrentChar in LettersDigits + '_':
+        while self.CurrentChar != None and self.CurrentChar in LettersDigits + '_.':
             IdString += self.CurrentChar
             self.Advance ()
 
@@ -451,6 +483,17 @@ class Lexer:
         if self.CurrentChar == '=':
             self.Advance ()
             TokenType = TokenGreaterThanEquals
+
+        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
+
+    def MakePass (self):
+        TokenType = TokenIllegal
+        StartPosition = self.Position.Copy ()
+        self.Advance ()
+
+        if self.CurrentChar == '.':
+            self.Advance ()
+            TokenType = TokenPass
 
         return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
 
@@ -553,6 +596,23 @@ class WhileNode:
         self.EndPosition = self.BodyNode.EndPosition
 
 class FuncDefNode:
+    def __init__ (self, VarNameToken, ArgNameTokens, BodyNode):
+        self.VarNameToken = VarNameToken
+        self.ArgNameTokens = ArgNameTokens
+        self.BodyNode = BodyNode
+
+        if self.VarNameToken:
+            self.StartPosition = self.VarNameToken.StartPosition
+
+        elif len (self.ArgNameTokens) > 0:
+            self.StartPosition = self.ArgNameTokens[0].StartPosition
+
+        else:
+            self.StartPosition = self.BodyNode.StartPosition
+
+        self.EndPosition = self.BodyNode.EndPosition
+
+class ClassDefNode:
     def __init__ (self, VarNameToken, ArgNameTokens, BodyNode):
         self.VarNameToken = VarNameToken
         self.ArgNameTokens = ArgNameTokens
@@ -877,6 +937,14 @@ class Parser:
 
             return Result.Success (FunctionDefinition)
 
+        elif Token.Matches (TokenKeyword, 'object'):
+            ClassDefinition = Result.Register (self.ClassDefinition ())
+
+            if Result.Error:
+                return Result
+
+            return Result.Success (ClassDefinition)
+
         return Result.Failure (InvalidSyntaxError (
             Token.StartPosition, Token.EndPosition,
             "Expected int, float, identifier, '+', '-', '(', '[', IF', 'for', 'while', 'task'"
@@ -1200,6 +1268,96 @@ class Parser:
             return Result
 
         return Result.Success (FuncDefNode (
+            VarNameToken,
+            ArgNameTokens,
+            NodeToReturn
+        ))
+
+    def ClassDefinition (self):
+        Result = ParseResult ()
+
+        if not self.CurrentToken.Matches (TokenKeyword, 'object'):
+            return Result.Failure (InvalidSyntaxError (
+                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                "Expected 'object'"
+            ))
+
+        Result.RegisterAdvancement ()
+        self.Advance ()
+
+        if self.CurrentToken.Type == TokenIdentifier:
+            VarNameToken = self.CurrentToken
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            if self.CurrentToken.Type != TokenLeftParenthesis:
+                return Result.Failure (InvalidSyntaxError (
+                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    "Expected '('"
+                ))
+
+        else:
+            VarNameToken = None
+
+            if self.CurrentToken.Type != TokenLeftParenthesis:
+                return Result.Failure (InvalidSyntaxError (
+                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    "Expected identifier or '('"
+                ))
+
+        Result.RegisterAdvancement ()
+        self.Advance ()
+        ArgNameTokens = []
+
+        if self.CurrentToken.Type == TokenIdentifier:
+            ArgNameTokens.append (self.CurrentToken)
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            while self.CurrentToken.Type == TokenComma:
+                Result.RegisterAdvancement ()
+                self.Advance ()
+
+                if self.CurrentToken.Type != TokenIdentifier:
+                    return Result.Failure (InvalidSyntaxError (
+                        self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                        "Expected identifier"
+                    ))
+
+                ArgNameTokens.append (self.CurrentToken)
+                Result.RegisterAdvancement ()
+                self.Advance ()
+
+            if self.CurrentToken.Type != TokenRightParenthesis:
+                return Result.Failure (InvalidSyntaxError (
+                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    "Expected ',' or ')'"
+                ))
+
+        else:
+            if self.CurrentToken.Type != TokenRightParenthesis:
+                return Result.Failure (InvalidSyntaxError (
+                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    "Expected identifier or ')'"
+                ))
+
+        Result.RegisterAdvancement ()
+        self.Advance ()
+
+        if self.CurrentToken.Type != TokenArrow:
+            return Result.Failure (InvalidSyntaxError (
+                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                "Expected '->'"
+            ))
+
+        Result.RegisterAdvancement ()
+        self.Advance ()
+        NodeToReturn = Result.Register (self.Expression ())
+
+        if Result.Error:
+            return Result
+
+        return Result.Success (ClassDefNode (
             VarNameToken,
             ArgNameTokens,
             NodeToReturn
@@ -1607,6 +1765,61 @@ class Function (Value):
         #return f"<task {self.Name}>"
         return ''
 
+class Class (Value):
+    def __init__ (self, Name, BodyNode, ArgNames):
+        super ().__init__ ()
+
+        self.Name = Name or '<anonymous>'
+        self.BodyNode = BodyNode
+        self.ArgNames = ArgNames
+
+    def Execute (self, _Args):
+        Result = RTResult ()
+        self.Interpreter = Interpreter ()
+        self.Context = Context (self.Name, self.Context, self.StartPosition)
+        self.Context.SymbolTable = SymbolTable (self.Context.Parent.SymbolTable)
+
+        if len (_Args) > len (self.ArgNames):
+            return Result.Failure (RTError (
+                self.StartPosition, self.EndPosition,
+                f"{len (_Args) - len (self.ArgNames)} too many args passed into '{self.Name}'",
+                self.Context
+            ))
+
+        if len (_Args) < len (self.ArgNames):
+            return Result.Failure (RTError (
+                self.StartPosition, self.EndPosition,
+                f"{len (self.ArgNames) - len (_Args)} too few args passed into '{self.Name}'",
+                self.Context
+            ))
+
+        for I in range (len (_Args)):
+            ArgName = self.ArgNames[I]
+            ArgValue = _Args[I]
+            ArgValue.SetContext (NewContext)
+            self.Context.SymbolTable.Set (ArgName, ArgValue)
+
+        Value = Result.Register (self.Interpreter.Visit (self.BodyNode, self.Context))
+
+        if Result.Error:
+            return Result
+
+        return Result.Success  (Value)
+
+    def Copy (self):
+        Copy = Function (self.Name, self.BodyNode, self.ArgNames)
+        Copy.SetContext (self.Context)
+        Copy.SetPosition (self.StartPosition, self.EndPosition)
+
+        return Copy
+
+    def AddObject (self, _Name, _Node):
+        self.Context.SymbolTable.Set (_Name, _Node)
+
+    def __repr__ (self):
+        #return f"<task {self.Name}>"
+        return ''
+
 class Dict (Value):
     def __init__ (self, Elements):
         super ().__init__ ()
@@ -1673,7 +1886,7 @@ class Interpreter:
         return Method (_Node, _Context)
 
     def NoVisitMethod (self, _Node, _Context):
-        raise Exception (f'No visit_{type (_Node).__name__} method defined')
+        raise Exception (f'No Visit{type (_Node).__name__} method defined')
 
     def VisitNumberNode (self, _Node, _Context):
         return RTResult ().Success  (
@@ -1945,6 +2158,20 @@ class Interpreter:
 
         return Result.Success (FuncValue)
 
+    def VisitClassDefNode (self, _Node, _Context):
+        Result = RTResult ()
+
+        ClassName = _Node.VarNameToken.Value if _Node.VarNameToken else None
+        BodyNode = _Node.BodyNode
+        ArgNames = [ArgName.Value for ArgName in _Node.ArgNameTokens]
+        ClassValue = Class (ClassName, BodyNode, ArgNames).SetContext (
+            _Context).SetPosition (_Node.StartPosition, _Node.EndPosition)
+
+        if _Node.VarNameToken:
+            _Context.SymbolTable.Set (ClassName, ClassValue)
+
+        return Result.Success (ClassValue)
+
     def VisitCallNode (self, _Node, _Context):
         Result = RTResult ()
         Args = []
@@ -1976,7 +2203,7 @@ class Interpreter:
 
                     except:
                         try:
-                            Path = 'C:/Users/{}/AppData/Local/Programs/GravPack/Lib/{}'.format (getpass.getuser (), Path)
+                            Path = GlobalPath.format (Path)
 
                             with open (Path, 'r') as File:
                                 Data = File.read ()
@@ -2088,6 +2315,7 @@ GlobalSymbolTable = SymbolTable ()
 GlobalSymbolTable.Set ('null', Number (0))
 GlobalSymbolTable.Set ('false', Number (0))
 GlobalSymbolTable.Set ('true', Number (1))
+GlobalSymbolTable.Set ('..', Number (0))
 
 def Run (_File, _Line):
     xLexer = Lexer (_File, _Line)
