@@ -23,7 +23,6 @@ import sys
 sys.path.append (os.path.abspath (os.path.dirname (__file__)))
 
 Path = ''
-print (sys.platform)
 
 if sys.platform == 'windows':
     Path = 'C:/Users/{}/AppData/Local/Programs/GravPack/Lib/{{}}'
@@ -31,7 +30,7 @@ if sys.platform == 'windows':
 elif sys.platform == 'linux':
     Path = '/home/{}/.shex/{{}}'
 
-# Add mac support
+# TODO: Add mac support
 
 
 
@@ -40,12 +39,12 @@ elif sys.platform == 'linux':
 #######################################
 
 from Errors import *
+from Types import List, String, Number, Function, BuiltInFunction
 
+import os
+import math
 import string
-import getpass
 from DavesLogger import Logs
-
-GlobalPath = Path.format (getpass.getuser ())
 
 
 
@@ -56,48 +55,6 @@ GlobalPath = Path.format (getpass.getuser ())
 Digits = '0123456789'
 Letters = string.ascii_letters
 LettersDigits = Letters + Digits
-DefaultFunctions = {
-    'print': {
-        'Args': ['value'],
-        'Body': 'value'
-    },
-
-    'import': {
-        'Args': ['path'],
-        'Body': '"imp::path"'
-    },
-
-    'read': {
-        'Args': ['path'],
-        'Body': '"read::path"'
-    },
-
-    'iseven':
-    {
-        'Args': ['number'],
-        'Body': '"iseven::number"'
-    },
-
-    'isodd': {
-        'Args': ['number'],
-        'Body': '"isodd::number"'
-    },
-
-    'length': {
-        'Args': ['value'],
-        'Body': '"length::value"'
-    },
-
-    'split': {
-        'Args': ['string', 'factor'],
-        'Body': '"split::string::factor"'
-    },
-
-    'join': {
-        'Args': ['list', 'factor'],
-        'Body': '"join::list::factor"'
-    }
-}
 
 
 
@@ -106,15 +63,15 @@ DefaultFunctions = {
 #######################################
 
 class Error:
-    def __init__ (self, StartPosition, EndPosition, ErrorName, Error):
+    def __init__ (self, StartPosition, EndPosition, Name, Error):
         self.StartPosition = StartPosition
         self.EndPosition = EndPosition
-        self.ErrorName = ErrorName
+        self.Name = Name
         self.Error = Error
 
     def AsString (self):
-        Result = f'{self.ErrorName}: {self.Error}\n'
-        Result += f'File :: {self.StartPosition.FileName}, Line :: {self.StartPosition.Line + 1}'
+        Result = f'{self.Name}: {self.Error}\n'
+        Result += f'File {self.StartPosition.FileName}, line {self.StartPosition.Line + 1}'
         Result += '\n\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
 
         return Result
@@ -132,15 +89,15 @@ class InvalidSyntaxError (Error):
         super ().__init__ (StartPosition, EndPosition, 'Invalid Syntax', Error)
 
 class RTError (Error):
-    def __init__(self, StartPosition, EndPosition, Error, Context):
+    def __init__ (self, StartPosition, EndPosition, Error, Context):
         super ().__init__ (StartPosition, EndPosition, 'Runtime Error', Error)
 
         self.Context = Context
 
     def AsString (self):
-        Result = self.GenerateTraceback ()
-        Result += f'{self.ErrorName}: {self.Error}'
-        Result += '\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
+        Result  = self.GenerateTraceback ()
+        Result += f'{self.Name}: {self.Error}'
+        Result += '\n\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
 
         return Result
 
@@ -150,11 +107,11 @@ class RTError (Error):
         Context = self.Context
 
         while Context:
-            Result = f'  File :: {Position.FileName}, Line :: {str (Position.Line + 1)}, In :: {Context.DisplayName}\n' + Result
+            Result = f'  File {Position.FileName}, line {str (Position.Line + 1)}, in {Context.DisplayName}\n' + Result
             Position = Context.ParentEntryPos
             Context = Context.Parent
 
-        return 'Traceback (most recent Call last):\n' + Result
+        return 'Traceback (most recent call last):\n' + Result
 
 
 
@@ -163,18 +120,18 @@ class RTError (Error):
 #######################################
 
 class Position:
-    def __init__(self, Index, Line, Column, FileName, FileText):
+    def __init__ (self, Index, Line, Column, FileName, FileText):
         self.Index = Index
         self.Line = Line
         self.Column = Column
         self.FileName = FileName
         self.FileText = FileText
 
-    def Advance (self, _CurrentChar = None):
+    def Advance (self, CurrentChar = None):
         self.Index += 1
         self.Column += 1
 
-        if _CurrentChar == '\n':
+        if CurrentChar == '\n':
             self.Line += 1
             self.Column = 0
 
@@ -183,49 +140,37 @@ class Position:
     def Copy (self):
         return Position (self.Index, self.Line, self.Column, self.FileName, self.FileText)
 
+
+
 #######################################
 # TOKENS
 #######################################
 
-# Types
-TokenInt = 'INT'
-TokenFloat = 'FLOAT'
-TokenString = 'STRING'
-TokenKeyword = 'KEYWORD'
-TokenIdentifier = 'IDENTIFIER'
-
-# Operators
-TokenPlus = 'PLUS'
-TokenMinus = 'MINUS'
-TokenMultiply = 'MUL'
-TokenDivide = 'DIV'
-TokenPower = 'POW'
-TokenEquals = 'EQ'
-
-# () & []
-TokenLeftParenthesis = 'LPAREN'
-TokenRightParenthesis = 'RPAREN'
-TokenLeftSquareBracket = 'LSQUARE'
-TokenRightSquareBracket = 'RSQUARE'
-
-# Equal Compare
-TokenNotEquals = 'NE'
-TokenEqualsEquals = 'EE'
-
-# More or Less Compare
-TokenLessThan = 'LT'
-TokenGreaterThan = 'GT'
-TokenLessThanEquals = 'LTE'
-TokenGreaterThanEquals = 'GTE'
-
-# Special
-#TokenPass = 'PASS' - I guess we're not doing it this way
-TokenComma = 'COMMA'
-TokenArrow = 'ARROW'
-
-# Other
-TokenEndOfFile = 'EOF'
-TokenIllegal = 'ILLEGAL'
+TokenInt                    = 'INT'
+TokenFloat                  = 'FLOAT'
+TokenString                 = 'STRING'
+TokenIdentifier             = 'IDENTIFIER'
+TokenKeyword                = 'KEYWORD'
+TokenPlus                   = 'PLUS'
+TokenMinus                  = 'MINUS'
+TokenMultiply               = 'MUL'
+TokenDivide                 = 'DIV'
+TokenPower                  = 'POW'
+TokenEquals                 = 'EQ'
+TokenLeftParenthesis        = 'LPAREN'
+TokenRightParenthesis       = 'RPAREN'
+TokenLeftSquareBracket      = 'LSQUARE'
+TokenRightSquareBracket     = 'RSQUARE'
+TokenEqualsEquals                       = 'EE'
+TokenNotEquals                          = 'NE'
+TokenLessThan                           = 'LT'
+TokenGreaterThan                        = 'GT'
+TokenLessThanEquals         = 'LTE'
+TokenGreaterThanEquals          = 'GTE'
+TokenComma                              = 'COMMA'
+TokenArrow                  = 'ARROW'
+TokenNewline                = 'NEWLINE'
+TokenEndOfFile                          = 'EOF'
 
 Keywords = [
     'var',
@@ -233,19 +178,19 @@ Keywords = [
     'or',
     'not',
     'if',
-    'elseif',
+    'elif',
     'else',
     'for',
     'to',
     'step',
     'while',
     'task',
-    'object',
-    'then'
+    'then',
+    'done'
 ]
 
 class Token:
-    def __init__(self, Type, Value = None, StartPosition = None, EndPosition = None):
+    def __init__ (self, Type, Value = None, StartPosition = None, EndPosition = None):
         self.Type = Type
         self.Value = Value
 
@@ -257,14 +202,11 @@ class Token:
         if EndPosition:
             self.EndPosition = EndPosition.Copy ()
 
-    def Matches (self, _Type, _Value):
-        return self.Type == _Type and self.Value == _Value
+    def Matches (self, Type, Value):
+        return self.Type == Type and self.Value == Value
 
     def __repr__ (self):
-        if self.Value:
-            return f'{self.Type}:{self.Value}'
-
-        return f'{self.Type}'
+        return f'{self.Type}:{Self.Value}' if self.Value else f'{self.Type}'
 
 
 
@@ -272,32 +214,37 @@ class Token:
 # LEXER
 #######################################
 
-class Lexer:
-    def __init__(self, FileName, Text):
+class ShexLexer:
+    def __init__ (self, FileName, Text):
         self.FileName = FileName
         self.Text = Text
         self.Position = Position (-1, 0, -1, FileName, Text)
         self.CurrentChar = None
+
         self.Advance ()
 
     def Advance (self):
         self.Position.Advance (self.CurrentChar)
         self.CurrentChar = self.Text[self.Position.Index] if self.Position.Index < len (self.Text) else None
 
-    def MakeTokens (self):
+    def Tokenize (self):
         Tokens = []
 
         while self.CurrentChar != None:
             if self.CurrentChar in ' \t':
                 self.Advance ()
 
+            elif self.CurrentChar in ';\n':
+                Tokens.append (Token (TokenNewline, StartPosition = self.Position))
+                self.Advance ()
+
             elif self.CurrentChar in Digits:
                 Tokens.append (self.MakeNumber ())
 
-            elif self.CurrentChar in Letters + '.':
+            elif self.CurrentChar in Letters:
                 Tokens.append (self.MakeIdentifier ())
 
-            elif self.CurrentChar == '"' or self.CurrentChar == "'":
+            elif self.CurrentChar in ('\'', '"'):
                 Tokens.append (self.MakeString ())
 
             elif self.CurrentChar == '+':
@@ -305,7 +252,7 @@ class Lexer:
                 self.Advance ()
 
             elif self.CurrentChar == '-':
-                Tokens.append(self.MakeMinusOrArrow ())
+                Tokens.append (self.MakeMinusOrArrow ())
 
             elif self.CurrentChar == '*':
                 Tokens.append (Token (TokenMultiply, StartPosition = self.Position))
@@ -336,12 +283,12 @@ class Lexer:
                 self.Advance ()
 
             elif self.CurrentChar == '!':
-                CurToken, Error = self.MakeNotEquals ()
+                _Token, Error = self.MakeNotEquals ()
 
                 if Error:
                     return [], Error
 
-                Tokens.append (CurToken)
+                Tokens.append (_Token)
 
             elif self.CurrentChar == '=':
                 Tokens.append (self.MakeEquals ())
@@ -356,21 +303,19 @@ class Lexer:
                 Tokens.append (Token (TokenComma, StartPosition = self.Position))
                 self.Advance ()
 
-            #elif self.CurrentChar == '.':
-                #Tokens.append (self.MakePass ())
-
             else:
                 StartPosition = self.Position.Copy ()
                 Char = self.CurrentChar
                 self.Advance ()
 
-                return [], IllegalCharError (StartPosition, self.Position, "'" + Char + "'")
+                return [], IllegalCharError (StartPosition, self.Position, f'\'{Char}\'')
 
         Tokens.append (Token (TokenEndOfFile, StartPosition = self.Position))
+
         return Tokens, None
 
     def MakeNumber (self):
-        NumString = ''
+        Number = ''
         Dots = 0
         StartPosition = self.Position.Copy ()
 
@@ -381,19 +326,20 @@ class Lexer:
 
                 Dots += 1
 
-            NumString += self.CurrentChar
+            Number += self.CurrentChar
             self.Advance ()
 
-        if Dots == 0:
-            return Token (TokenInt, int (NumString), StartPosition, self.Position)
+        if not Dots:
+            return Token (TokenInt, int (Number), StartPosition, self.Position)
 
         else:
-            return Token (TokenFloat, float (NumString), StartPosition, self.Position)
+            return Token (TokenFloat, float (Number), StartPosition, self.Position)
 
     def MakeString (self):
         String = ''
         StartPosition = self.Position.Copy ()
-        IsEscapeCharacter = False
+        EscapeCharacter = False
+
         self.Advance ()
 
         EscapeCharacters = {
@@ -401,65 +347,73 @@ class Lexer:
             't': '\t'
         }
 
-        while self.CurrentChar != None and (self.CurrentChar != '"' and self.CurrentChar != "'" or IsEscapeCharacter):
-            if IsEscapeCharacter:
-                String += EscapeCharacters.get (self.CurrentChar, self.CurrentChar)
+        while self.CurrentChar != None and (self.CurrentChar not in ('\'', '"') or EscapeCharacter):
+            if EscapeCharacter:
+                String += EscapeCharacter.get (self.CurrentChar, self.CurrentChar)
 
             else:
                 if self.CurrentChar == '\\':
-                    IsEscapeCharacter = True
+                    EscapeCharacter = True
 
                 else:
                     String += self.CurrentChar
 
             self.Advance ()
-            IsEscapeCharacter = False
+            EscapeCharacter = False
 
         self.Advance ()
 
         return Token (TokenString, String, StartPosition, self.Position)
 
     def MakeIdentifier (self):
-        IdString = ''
+        ID = ''
         StartPosition = self.Position.Copy ()
 
-        while self.CurrentChar != None and self.CurrentChar in LettersDigits + '_.':
-            IdString += self.CurrentChar
+        while self.CurrentChar != None and self.CurrentChar in LettersDigits + '_':
+            ID += self.CurrentChar
+
             self.Advance ()
 
-        TokenType = TokenKeyword if IdString in Keywords else TokenIdentifier
+        TokenType = TokenKeyword if ID in Keywords else TokenIdentifier
 
-        return Token (TokenType, IdString, StartPosition, self.Position)
+        return Token (TokenType, ID, StartPosition, self.Position)
 
     def MakeMinusOrArrow (self):
         TokenType = TokenMinus
         StartPosition = self.Position.Copy ()
+
         self.Advance ()
 
         if self.CurrentChar == '>':
             self.Advance ()
+
             TokenType = TokenArrow
 
         return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
 
     def MakeNotEquals (self):
         StartPosition = self.Position.Copy ()
+
         self.Advance ()
 
         if self.CurrentChar == '=':
             self.Advance ()
+
             return Token (TokenNotEquals, StartPosition = StartPosition, EndPosition = self.Position), None
 
         self.Advance ()
+
         return None, ExpectedCharError (StartPosition, self.Position, "'=' (after '!')")
 
     def MakeEquals (self):
         TokenType = TokenEquals
         StartPosition = self.Position.Copy ()
+
         self.Advance ()
 
         if self.CurrentChar == '=':
             self.Advance ()
+
             TokenType = TokenEqualsEquals
 
         return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
@@ -467,10 +421,12 @@ class Lexer:
     def MakeLessThan (self):
         TokenType = TokenLessThan
         StartPosition = self.Position.Copy ()
+
         self.Advance ()
 
         if self.CurrentChar == '=':
             self.Advance ()
+
             TokenType = TokenLessThanEquals
 
         return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
@@ -478,22 +434,13 @@ class Lexer:
     def MakeGreaterThan (self):
         TokenType = TokenGreaterThan
         StartPosition = self.Position.Copy ()
+
         self.Advance ()
 
         if self.CurrentChar == '=':
             self.Advance ()
+
             TokenType = TokenGreaterThanEquals
-
-        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
-
-    def MakePass (self):
-        TokenType = TokenIllegal
-        StartPosition = self.Position.Copy ()
-        self.Advance ()
-
-        if self.CurrentChar == '.':
-            self.Advance ()
-            TokenType = TokenPass
 
         return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
 
@@ -504,11 +451,11 @@ class Lexer:
 #######################################
 
 class NumberNode:
-    def __init__(self, Token):
+    def __init__ (self, Token):
         self.Token = Token
 
-        self.StartPosition = self.Token.StartPosition
-        self.EndPosition = self.Token.EndPosition
+        self.StartPosition = Token.StartPosition
+        self.EndPosition = Token.EndPosition
 
     def __repr__ (self):
         return f'{self.Token}'
@@ -517,8 +464,8 @@ class StringNode:
     def __init__ (self, Token):
         self.Token = Token
 
-        self.StartPosition = self.Token.StartPosition
-        self.EndPosition = self.Token.EndPosition
+        self.StartPosition = Token.StartPosition
+        self.EndPosition = Token.EndPosition
 
     def __repr__ (self):
         return f'{self.Token}'
@@ -534,16 +481,16 @@ class VarAccessNode:
     def __init__ (self, VarNameToken):
         self.VarNameToken = VarNameToken
 
-        self.StartPosition = self.VarNameToken.StartPosition
-        self.EndPosition = self.VarNameToken.EndPosition
+        self.StartPosition = VarNameToken.StartPosition
+        self.EndPosition = VarNameToken.EndPosition
 
 class VarAssignNode:
     def __init__ (self, VarNameToken, ValueNode):
         self.VarNameToken = VarNameToken
         self.ValueNode = ValueNode
 
-        self.StartPosition = self.VarNameToken.StartPosition
-        self.EndPosition = self.ValueNode.EndPosition
+        self.StartPosition = VarNameToken.StartPosition
+        self.EndPosition = ValueNode.EndPosition
 
 class BinOpNode:
     def __init__ (self, LeftNode, OperatorToken, RightNode):
@@ -551,18 +498,18 @@ class BinOpNode:
         self.OperatorToken = OperatorToken
         self.RightNode = RightNode
 
-        self.StartPosition = self.LeftNode.StartPosition
-        self.EndPosition = self.RightNode.EndPosition
+        self.StartPosition = LeftNode.StartPosition
+        self.EndPosition = RightNode.EndPosition
 
     def __repr__ (self):
         return f'({self.LeftNode}, {self.OperatorToken}, {self.RightNode})'
 
 class UnaryOpNode:
-    def __init__(self, OperatorToken, Node):
+    def __init__ (self, OperatorToken, Node):
         self.OperatorToken = OperatorToken
         self.Node = Node
 
-        self.StartPosition = self.OperatorToken.StartPosition
+        self.StartPosition = OperatorToken.StartPosition
         self.EndPosition = Node.EndPosition
 
     def __repr__ (self):
@@ -573,74 +520,60 @@ class IfNode:
         self.Cases = Cases
         self.ElseCase = ElseCase
 
-        self.StartPosition = self.Cases[0][0].StartPosition
-        self.EndPosition = (self.ElseCase or self.Cases[len (self.Cases) - 1][0]).EndPosition
+        self.StartPosition = Cases[0][0].StartPosition
+        self.EndPosition = (ElseCase or Cases[len (Cases) - 1])[0].EndPosition
 
 class ForNode:
-    def __init__ (self, VarNameToken, StartValueNode, EndValueNode, StepValueNode, BodyNode):
+    def __init__ (self, VarNameToken, StartValueNode, EndValueNode, StepValueNode, BodyNode, ShouldReturnNull):
         self.VarNameToken = VarNameToken
         self.StartValueNode = StartValueNode
         self.EndValueNode = EndValueNode
         self.StepValueNode = StepValueNode
         self.BodyNode = BodyNode
+        self.ShouldReturnNull = ShouldReturnNull
 
-        self.StartPosition = self.VarNameToken.StartPosition
-        self.EndPosition = self.BodyNode.EndPosition
+        self.StartPosition = VarNameToken.StartPosition
+        self.EndPosition = BodyNode.EndPosition
 
 class WhileNode:
-    def __init__ (self, ConditionNode, BodyNode):
+    def __init__ (self, ConditionNode, BodyNode, ShouldReturnNull):
         self.ConditionNode = ConditionNode
         self.BodyNode = BodyNode
+        self.ShouldReturnNull = ShouldReturnNull
 
-        self.StartPosition = self.ConditionNode.StartPosition
-        self.EndPosition = self.BodyNode.EndPosition
+        self.StartPosition = ConditionNode.StartPosition
+        self.EndPosition = BodyNode.EndPosition
 
-class FuncDefNode:
-    def __init__ (self, VarNameToken, ArgNameTokens, BodyNode):
+class FunctionDefinitionNode:
+    def __init__ (self, VarNameToken, ArgNameTokens, BodyNode, ShouldReturnNull):
         self.VarNameToken = VarNameToken
         self.ArgNameTokens = ArgNameTokens
         self.BodyNode = BodyNode
+        self.ShouldReturnNull = ShouldReturnNull
 
-        if self.VarNameToken:
-            self.StartPosition = self.VarNameToken.StartPosition
+        if VarNameToken:
+            self.StartPosition = VarNameToken.StartPosition
 
-        elif len (self.ArgNameTokens) > 0:
-            self.StartPosition = self.ArgNameTokens[0].StartPosition
-
-        else:
-            self.StartPosition = self.BodyNode.StartPosition
-
-        self.EndPosition = self.BodyNode.EndPosition
-
-class ClassDefNode:
-    def __init__ (self, VarNameToken, ArgNameTokens, BodyNode):
-        self.VarNameToken = VarNameToken
-        self.ArgNameTokens = ArgNameTokens
-        self.BodyNode = BodyNode
-
-        if self.VarNameToken:
-            self.StartPosition = self.VarNameToken.StartPosition
-
-        elif len (self.ArgNameTokens) > 0:
-            self.StartPosition = self.ArgNameTokens[0].StartPosition
+        elif len (ArgNameTokens) > 0:
+            self.StartPosition = ArgNameTokens[0].StartPosition
 
         else:
-            self.StartPosition = self.BodyNode.StartPosition
+            self.StartPosition = BodyNode.StartPosition
 
-        self.EndPosition = self.BodyNode.EndPosition
+        self.EndPosition = BodyNode.EndPosition
 
 class CallNode:
     def __init__ (self, NodeToCall, ArgNodes):
         self.NodeToCall = NodeToCall
         self.ArgNodes = ArgNodes
 
-        self.StartPosition = self.NodeToCall.StartPosition
+        self.StartPosition = NodeToCall.StartPosition
 
-        if len (self.ArgNodes) > 0:
-            self.EndPosition = self.ArgNodes[len (self.ArgNodes) - 1].EndPosition
+        if len (ArgNodes) > 0:
+            self.EndPosition = ArgNodes[len (ArgNodes) - 1].EndPosition
 
         else:
-            self.EndPosition = self.NodeToCall.EndPosition
+            self.EndPosition = NodeToCall.EndPosition
 
 
 
@@ -654,28 +587,37 @@ class ParseResult:
         self.Node = None
         self.LastRegisteredAdvanceCount = 0
         self.AdvanceCount = 0
+        self.ToReverseCount = 0
 
     def RegisterAdvancement (self):
         self.LastRegisteredAdvanceCount = 1
         self.AdvanceCount += 1
 
-    def Register (self, _Result):
-        self.LastRegisteredAdvanceCount = _Result.AdvanceCount
-        self.AdvanceCount += _Result.AdvanceCount
+    def Register (self, Result):
+        self.LastRegisteredAdvanceCount = Result.AdvanceCount
+        self.AdvanceCount += Result.AdvanceCount
 
-        if _Result.Error:
-            _Result.Error = _Result.Error
+        if Result.Error:
+            self.Error = Result.Error
 
-        return _Result.Node
+        return Result.Node
 
-    def Success (self, _Node):
-        self.Node = _Node
+    def TryRegister (self, Result):
+        if Result.Error:
+            self.ToReverseCount = Result.AdvanceCount
+
+            return None
+
+        return self.Register (Result)
+
+    def Success (self, Node):
+        self.Node = Node
 
         return self
 
-    def Failure (self, _Error):
+    def Failure (self, Error):
         if not self.Error or self.LastRegisteredAdvanceCount == 0:
-            self.Error = _Error
+            self.Error = Error
 
         return self
 
@@ -685,32 +627,93 @@ class ParseResult:
 # PARSER
 #######################################
 
-class Parser:
-    def __init__(self, Tokens):
+class ShexParser:
+    def __init__ (self, Tokens):
         self.Tokens = Tokens
         self.TokenIndex = -1
+        self.CurrentToken = None
+
         self.Advance ()
 
-    def Advance (self, ):
+    def Advance (self):
         self.TokenIndex += 1
-
-        if self.TokenIndex < len (self.Tokens):
-            self.CurrentToken = self.Tokens[self.TokenIndex]
+        self.UpdateCurrentToken ()
 
         return self.CurrentToken
 
+    def Reverse (self, Amount = 1):
+        self.TokenIndex -= Amount
+        self.UpdateCurrentToken ()
+
+        return self.CurrentToken
+
+    def UpdateCurrentToken (self):
+        if self.TokenIndex >= 0 and self.TokenIndex < len (self.Tokens):
+            self.CurrentToken = self.Tokens[self.TokenIndex]
+
     def Parse (self):
-        Result = self.Expression ()
+        Result = self.Statements ()
 
         if not Result.Error and self.CurrentToken.Type != TokenEndOfFile:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                "Expected '+', '-', '*', '/', '^', '==', '!=', '<', '>', <=', '>=', 'and' or 'or'"
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
+                "Expected '+', '-', '*', '/', '^', '==', '!=', '<', '>', <=', '>=', 'AND' or 'OR'"
             ))
 
         return Result
 
-    def Expression (self):
+    def Statements (self):
+        Result = ParseResult ()
+        Statements = []
+        StartPosition = self.CurrentToken.StartPosition.Copy ()
+
+        while self.CurrentToken.Type == TokenNewline:
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+        Statement = Result.Register (self.Expr ())
+
+        if Result.Error:
+            return Result
+
+        Statements.append (Statement)
+
+        MoreStatements = True
+
+        while True:
+            NewLineCount = 0
+
+            while self.CurrentToken.Type == TokenNewline:
+                Result.RegisterAdvancement ()
+                self.Advance ()
+
+                NewLineCount += 1
+
+            if NewLineCount == 0:
+                MoreStatements = False
+
+            if not MoreStatements:
+                break
+
+            Statement = Result.TryRegister (self.Expr ())
+
+            if not Statement:
+                self.Reverse (Result.ToReverseCount)
+
+                MoreStatements = False
+
+                continue
+
+            Statements.append (Statement)
+
+        return Result.Success (ListNode (
+            Statements,
+            StartPosition,
+            self.CurrentToken.EndPosition.Copy ()
+        ))
+
+    def Expr (self):
         Result = ParseResult ()
 
         if self.CurrentToken.Matches (TokenKeyword, 'var'):
@@ -719,75 +722,76 @@ class Parser:
 
             if self.CurrentToken.Type != TokenIdentifier:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     'Expected identifier'
                 ))
 
             VarName = self.CurrentToken
+
             Result.RegisterAdvancement ()
             self.Advance ()
 
             if self.CurrentToken.Type != TokenEquals:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected '='"
                 ))
 
             Result.RegisterAdvancement ()
             self.Advance ()
-            Expr = Result.Register (self.Expression ())
+
+            Expr = Result.Register (self.Expr ())
 
             if Result.Error:
                 return Result
 
             return Result.Success (VarAssignNode (VarName, Expr))
 
-        Node = Result.Register (self.BinOp (self.CompExpression, ((TokenKeyword, 'and'), (TokenKeyword, 'or'))))
+        Node = Result.Register (self.BinOp (self.CompExpr, ((TokenKeyword, 'and'), (TokenKeyword, 'or'))))
 
         if Result.Error:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'var', 'if', 'for', 'while', 'task', int, float, identifier, '+', '-', '(', '[' or 'not'"
             ))
 
         return Result.Success (Node)
 
-    def CompExpression (self):
+    def CompExpr (self):
         Result = ParseResult ()
 
         if self.CurrentToken.Matches (TokenKeyword, 'not'):
             OperatorToken = self.CurrentToken
+
             Result.RegisterAdvancement ()
             self.Advance ()
 
-            Node = Result.Register (self.CompExpression ())
+            Node = Result.Register (self.CompExpr ())
 
             if Result.Error:
                 return Result
 
             return Result.Success (UnaryOpNode (OperatorToken, Node))
 
-        Node = Result.Register (self.BinOp (
-                self.ArithExpression,
-                (
-                    TokenEqualsEquals, TokenNotEquals, TokenLessThan, TokenGreaterThan, TokenLessThanEquals, TokenGreaterThanEquals
-                )
-            )
-        )
+        Node = Result.Register (self.BinOp (self.ArithExpr, (TokenEqualsEquals, TokenNotEquals, TokenLessThan, TokenGreaterThan, TokenLessThanEquals, TokenGreaterThan)))
 
         if Result.Error:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                "Expected int, float, identifier, '+', '-', '(', '[', 'if', 'for', 'while', 'task' or 'not'"
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
+                "Expected int, float, identifier, '+', '-', '(', '[', 'IF', 'FOR', 'WHILE', 'FUN' or 'NOT'"
             ))
 
         return Result.Success (Node)
 
-    def ArithExpression (self):
+    def ArithExpr (self):
         return self.BinOp (self.Term, (TokenPlus, TokenMinus))
 
     def Term (self):
-        return self.BinOp (self.Factor, (TokenMultiply, TokenDivide))
+        return self.BinOp(self.Factor, (TokenMultiply, TokenDivide))
 
     def Factor (self):
         Result = ParseResult ()
@@ -796,7 +800,8 @@ class Parser:
         if Token.Type in (TokenPlus, TokenMinus):
             Result.RegisterAdvancement ()
             self.Advance ()
-            Factor = Result.Register (self.Factor())
+
+            Factor = Result.Register (self.Factor ())
 
             if Result.Error:
                 return Result
@@ -810,7 +815,7 @@ class Parser:
 
     def Call (self):
         Result = ParseResult ()
-        Atom = Result.Register (self.Atom())
+        Atom = Result.Register (self.Atom ())
 
         if Result.Error:
             return Result
@@ -818,6 +823,7 @@ class Parser:
         if self.CurrentToken.Type == TokenLeftParenthesis:
             Result.RegisterAdvancement ()
             self.Advance ()
+
             ArgNodes = []
 
             if self.CurrentToken.Type == TokenRightParenthesis:
@@ -825,26 +831,28 @@ class Parser:
                 self.Advance ()
 
             else:
-                ArgNodes.append (Result.Register (self.Expression ()))
+                ArgNodes.append (Result.Register (self.Expr ()))
 
                 if Result.Error:
                     return Result.Failure (InvalidSyntaxError (
-                        self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                        "Expected ')', 'var', 'if', 'for', 'while', 'task', int, float, identifier, '+', '-', '(', '[' or 'not'"
+                        self.CurrentToken.StartPosition,
+                        self.CurrentToken.EndPosition,
+                        "Expected ')', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
                     ))
 
                 while self.CurrentToken.Type == TokenComma:
                     Result.RegisterAdvancement ()
                     self.Advance ()
 
-                    ArgNodes.append (Result.Register (self.Expression ()))
+                    ArgNodes.append (Result.Register (self.Expr ()))
 
                     if Result.Error:
                         return Result
 
                 if self.CurrentToken.Type != TokenRightParenthesis:
                     return Result.Failure (InvalidSyntaxError (
-                        self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                        self.CurrentToken.StartPosition,
+                        self.CurrentToken.EndPosition,
                         f"Expected ',' or ')'"
                     ))
 
@@ -880,7 +888,8 @@ class Parser:
         elif Token.Type == TokenLeftParenthesis:
             Result.RegisterAdvancement ()
             self.Advance ()
-            Expr = Result.Register (self.Expression ())
+
+            Expr = Result.Register (self.Expr ())
 
             if Result.Error:
                 return Result
@@ -893,41 +902,42 @@ class Parser:
 
             else:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected ')'"
                 ))
 
         elif Token.Type == TokenLeftSquareBracket:
-            ListExpression = Result.Register (self.ListExpression ())
+            ListExpr = Result.Register (self.ListExpr ())
 
             if Result.Error:
                 return Result
 
-            return Result.Success (ListExpression)
+            return Result.Success (ListExpr)
 
         elif Token.Matches (TokenKeyword, 'if'):
-            IfExpression = Result.Register (self.IfExpression ())
+            IfExpr = Result.Register (self.IfExpr ())
 
             if Result.Error:
                 return Result
 
-            return Result.Success (IfExpression)
+            return Result.Success (IfExpr)
 
         elif Token.Matches (TokenKeyword, 'for'):
-            ForExpression = Result.Register (self.ForExpression ())
+            ForExpr = Result.Register (self.ForExpr ())
 
             if Result.Error:
                 return Result
 
-            return Result.Success (ForExpression)
+            return Result.Success (ForExpr)
 
         elif Token.Matches (TokenKeyword, 'while'):
-            WhileExpression = Result.Register (self.WhileExpression ())
+            WhileExpr = Result.Register (self.WhileExpr ())
 
             if Result.Error:
                 return Result
 
-            return Result.Success (WhileExpression)
+            return Result.Success (WhileExpr)
 
         elif Token.Matches (TokenKeyword, 'task'):
             FunctionDefinition = Result.Register (self.FunctionDefinition ())
@@ -937,27 +947,21 @@ class Parser:
 
             return Result.Success (FunctionDefinition)
 
-        elif Token.Matches (TokenKeyword, 'object'):
-            ClassDefinition = Result.Register (self.ClassDefinition ())
-
-            if Result.Error:
-                return Result
-
-            return Result.Success (ClassDefinition)
-
         return Result.Failure (InvalidSyntaxError (
-            Token.StartPosition, Token.EndPosition,
-            "Expected int, float, identifier, '+', '-', '(', '[', IF', 'for', 'while', 'task'"
+            Token.StartPosition,
+            Token.EndPosition,
+            "Expected int, float, identifier, '+', '-', '(', '[', IF', 'FOR', 'WHILE', 'FUN'"
         ))
 
-    def ListExpression (self):
+    def ListExpr(self):
         Result = ParseResult ()
         ElementNodes = []
         StartPosition = self.CurrentToken.StartPosition.Copy ()
 
         if self.CurrentToken.Type != TokenLeftSquareBracket:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected '['"
             ))
 
@@ -969,26 +973,28 @@ class Parser:
             self.Advance ()
 
         else:
-            ElementNodes.append (Result.Register (self.Expression ()))
+            ElementNodes.append (Result.Register (self.Expr ()))
 
             if Result.Error:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                    "Expected ']', 'var', 'if', 'for', 'while', 'task', int, float, identifier, '+', '-', '(', '[' or 'not'"
+                  self.CurrentToken.StartPosition,
+                  self.CurrentToken.EndPosition,
+                  "Expected ']', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
                 ))
 
             while self.CurrentToken.Type == TokenComma:
                 Result.RegisterAdvancement ()
                 self.Advance ()
 
-                ElementNodes.append (Result.Register (self.Expression ()))
+                ElementNodes.append (Result.Register (self.Expr ()))
 
                 if Result.Error:
                     return Result
 
             if self.CurrentToken.Type != TokenRightSquareBracket:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected ',' or ']'"
                 ))
 
@@ -996,88 +1002,165 @@ class Parser:
             self.Advance ()
 
         return Result.Success (ListNode (
-            ElementNodes,
-            StartPosition,
-            self.CurrentToken.EndPosition.Copy ()
+          ElementNodes,
+          StartPosition,
+          self.CurrentToken.EndPosition.Copy ()
         ))
 
-    def IfExpression (self):
+    def IfExpr (self):
+        Result = ParseResult ()
+        AllCases = Result.Register (self.IfExprCases ('if'))
+
+        if Result.Error:
+            return Result
+
+        Cases, ElseCase = AllCases
+
+        return Result.Success (IfNode (Cases, ElseCase))
+
+    def IfExprB (self):
+        return self.IfExprCases ('elif')
+
+    def IfExprC (self):
+        Result = ParseResult ()
+        ElseCase = None
+
+        if self.CurrentToken.Matches (TokenKeyword, 'else'):
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            if self.CurrentToken.Type == TokenNewline:
+                Result.RegisterAdvancement ()
+                self.Advance ()
+
+                Statements = Result.Register (self.Statements ())
+
+                if Result.Error:
+                    return Result
+
+                ElseCase = (Statements, True)
+
+                if self.CurrentToken.Matches (TokenKeyword, 'done'):
+                    Result.RegisterAdvancement ()
+                    self.Advance ()
+
+                else:
+                    return Result.Failure (InvalidSyntaxError (
+                        self.CurrentToken.StartPosition,
+                        self.CurrentToken.EndPosition,
+                        "Expected 'done'"
+                    ))
+
+            else:
+                Expr = Result.Register (self.Expr ())
+
+                if Result.Error:
+                    return Result
+
+                ElseCase = (Expr, False)
+
+        return Result.Success (ElseCase)
+
+    def IfExprBOrC (self):
         Result = ParseResult ()
         Cases = []
         ElseCase = None
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'if'):
+        if self.CurrentToken.Matches (TokenKeyword, 'elif'):
+            AllCases = Result.Register (self.IfExprB ())
+
+            if Result.Error:
+                return Result
+
+            Cases, ElseCase = AllCases
+
+        else:
+            ElseCase = Result.Register (self.IfExprC ())
+
+            if Result.Error:
+                return Result
+
+        return Result.Success ((Cases, ElseCase))
+
+    def IfExprCases (self, CaseKeyword):
+        Result = ParseResult ()
+        Cases = []
+        ElseCase = None
+
+        if not self.CurrentToken.Matches (TokenKeyword, CaseKeyword):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                "Expected 'if'"
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
+                f"Expected '{case_keyword}'"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        Condition = Result.Register (self.Expression ())
+        Condition = Result.Register (self.Expr ())
 
         if Result.Error:
             return Result
 
         if not self.CurrentToken.Matches (TokenKeyword, 'then'):
-            return Result.Failure (InvalidSyntaxError(
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+            return Result.Failure (InvalidSyntaxError (
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'then'"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        Expr = Result.Register (self.Expression ())
-
-        if Result.Error:
-            return Result
-
-        Cases.append ((Condition, Expr))
-
-        while self.CurrentToken.Matches (TokenKeyword, 'elseif'):
+        if self.CurrentToken.Type == TokenNewline:
             Result.RegisterAdvancement ()
             self.Advance ()
 
-            Condition = Result.Register (self.Expression ())
+            Statements = Result.Register (self.Statements ())
 
             if Result.Error:
                 return Result
 
-            if not self.CurrentToken.Matches (TokenKeyword, 'then'):
-                return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                    "Expected 'then'"
-                ))
+            Cases.append ((Condition, Statements, True))
 
-            Result.RegisterAdvancement ()
-            self.Advance ()
+            if self.CurrentToken.Matches (TokenKeyword, 'done'):
+                Result.RegisterAdvancement ()
+                self.Advance ()
 
-            Expr = Result.Register (self.Expression ())
+            else:
+                AllCases = Result.Register (self.IfExprBOrC ())
 
-            if Result.Error:
-                return Result
+                if Result.Error:
+                    return Result
 
-            Cases.append ((Condition, Expr))
+                NewCases, ElseCase = AllCases
+                Cases.extend (NewCases)
 
-        if self.CurrentToken.Matches (TokenKeyword, 'else'):
-            Result.RegisterAdvancement ()
-            self.Advance ()
-
-            ElseCase = Result.Register (self.Expression ())
+        else:
+            Expr = Result.Register (self.Expr ())
 
             if Result.Error:
                 return Result
 
-        return Result.Success (IfNode (Cases, ElseCase))
+            Cases.append ((Condition, Expr, False))
 
-    def ForExpression (self):
+            AllCases = Result.Register (self.IfExprBOrC ())
+
+            if Result.Error:
+                return Result
+
+            NewCases, ElseCase = AllCases
+            Cases.extend (NewCases)
+
+        return Result.Success ((Cases, ElseCase))
+
+    def ForExpr (self):
         Result = ParseResult ()
 
         if not self.CurrentToken.Matches (TokenKeyword, 'for'):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'for'"
             ))
 
@@ -1086,38 +1169,42 @@ class Parser:
 
         if self.CurrentToken.Type != TokenIdentifier:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected identifier"
             ))
 
         VarName = self.CurrentToken
+
         Result.RegisterAdvancement ()
         self.Advance ()
 
         if self.CurrentToken.Type != TokenEquals:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected '='"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        StartValue = Result.Register (self.Expression ())
+        StartValue = Result.Register (self.Expr ())
 
         if Result.Error:
             return Result
 
         if not self.CurrentToken.Matches (TokenKeyword, 'to'):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'to'"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        EndValue = Result.Register (self.Expression ())
+        EndValue = Result.Register (self.Expr ())
 
         if Result.Error:
             return Result
@@ -1126,7 +1213,7 @@ class Parser:
             Result.RegisterAdvancement ()
             self.Advance ()
 
-            StepValue = Result.Register (self.Expression ())
+            StepValue = Result.Register (self.Expr ())
 
             if Result.Error:
                 return Result
@@ -1136,59 +1223,105 @@ class Parser:
 
         if not self.CurrentToken.Matches (TokenKeyword, 'then'):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'then'"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        Body = Result.Register (self.Expression ())
+        if self.CurrentToken.Type == TokenNewline:
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            Body = Result.Register (self.Statements ())
+
+            if Result.Error:
+                return Result
+
+            if not self.CurrentToken.Matches (TokenKeyword, 'done'):
+                return Result.Failure (InvalidSyntaxError (
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
+                    "Expected 'done'"
+                ))
+
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            return Result.Success (ForNode (VarName, StartValue, EndValue, StepValue, Body, True))
+
+        Body = Result.Register (self.Expr ())
 
         if Result.Error:
             return Result
 
-        return Result.Success (ForNode (VarName, StartValue, EndValue, StepValue, Body))
+        return Result.Success (ForNode (VarName, StartValue, EndValue, StepValue, Body, False))
 
-    def WhileExpression (self):
+    def WhileExpr (self):
         Result = ParseResult ()
 
         if not self.CurrentToken.Matches (TokenKeyword, 'while'):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'while'"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        Condition = Result.Register (self.Expression ())
+        Condition = Result.Register (self.Expr ())
 
         if Result.Error:
             return Result
 
         if not self.CurrentToken.Matches (TokenKeyword, 'then'):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'then'"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        Body = Result.Register (self.Expression ())
+        if self.CurrentToken.Type == TokenNewline:
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            Body = Result.Register (self.Statements ())
+
+            if Result.Error:
+                return Result
+
+            if not self.CurrentToken.Matches (TokenKeyword, 'done'):
+                return Result.Failure (InvalidSyntaxError (
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
+                    "Expected 'done'"
+                ))
+
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            return Result.Success (WhileNode (Condition, Body, True))
+
+        Body = Result.Register (self.Expr ())
 
         if Result.Error:
             return Result
 
-        return Result.Success (WhileNode (Condition, Body))
+        return Result.Success (WhileNode (Condition, Body, False))
 
     def FunctionDefinition (self):
         Result = ParseResult ()
 
         if not self.CurrentToken.Matches (TokenKeyword, 'task'):
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
                 "Expected 'task'"
             ))
 
@@ -1197,12 +1330,14 @@ class Parser:
 
         if self.CurrentToken.Type == TokenIdentifier:
             VarNameToken = self.CurrentToken
+
             Result.RegisterAdvancement ()
             self.Advance ()
 
             if self.CurrentToken.Type != TokenLeftParenthesis:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected '('"
                 ))
 
@@ -1211,16 +1346,19 @@ class Parser:
 
             if self.CurrentToken.Type != TokenLeftParenthesis:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected identifier or '('"
                 ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
+
         ArgNameTokens = []
 
         if self.CurrentToken.Type == TokenIdentifier:
             ArgNameTokens.append (self.CurrentToken)
+
             Result.RegisterAdvancement ()
             self.Advance ()
 
@@ -1230,154 +1368,99 @@ class Parser:
 
                 if self.CurrentToken.Type != TokenIdentifier:
                     return Result.Failure (InvalidSyntaxError (
-                        self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                        self.CurrentToken.StartPosition,
+                        self.CurrentToken.EndPosition,
                         "Expected identifier"
                     ))
 
                 ArgNameTokens.append (self.CurrentToken)
+
                 Result.RegisterAdvancement ()
                 self.Advance ()
 
             if self.CurrentToken.Type != TokenRightParenthesis:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected ',' or ')'"
                 ))
 
         else:
             if self.CurrentToken.Type != TokenRightParenthesis:
                 return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
                     "Expected identifier or ')'"
                 ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
 
-        if self.CurrentToken.Type != TokenArrow:
-            return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                "Expected '->'"
-            ))
-
-        Result.RegisterAdvancement ()
-        self.Advance ()
-        NodeToReturn = Result.Register (self.Expression ())
-
-        if Result.Error:
-            return Result
-
-        return Result.Success (FuncDefNode (
-            VarNameToken,
-            ArgNameTokens,
-            NodeToReturn
-        ))
-
-    def ClassDefinition (self):
-        Result = ParseResult ()
-
-        if not self.CurrentToken.Matches (TokenKeyword, 'object'):
-            return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                "Expected 'object'"
-            ))
-
-        Result.RegisterAdvancement ()
-        self.Advance ()
-
-        if self.CurrentToken.Type == TokenIdentifier:
-            VarNameToken = self.CurrentToken
+        if self.CurrentToken.Type == TokenArrow:
             Result.RegisterAdvancement ()
             self.Advance ()
 
-            if self.CurrentToken.Type != TokenLeftParenthesis:
-                return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                    "Expected '('"
-                ))
+            Body = Result.Register (self.Expr ())
 
-        else:
-            VarNameToken = None
+            if Result.Error:
+                return Result
 
-            if self.CurrentToken.Type != TokenLeftParenthesis:
-                return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                    "Expected identifier or '('"
-                ))
+            return Result.Success (FunctionDefinitionNode (
+              VarNameToken,
+              ArgNameTokens,
+              Body,
+              False
+            ))
 
-        Result.RegisterAdvancement ()
-        self.Advance ()
-        ArgNameTokens = []
-
-        if self.CurrentToken.Type == TokenIdentifier:
-            ArgNameTokens.append (self.CurrentToken)
-            Result.RegisterAdvancement ()
-            self.Advance ()
-
-            while self.CurrentToken.Type == TokenComma:
-                Result.RegisterAdvancement ()
-                self.Advance ()
-
-                if self.CurrentToken.Type != TokenIdentifier:
-                    return Result.Failure (InvalidSyntaxError (
-                        self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                        "Expected identifier"
-                    ))
-
-                ArgNameTokens.append (self.CurrentToken)
-                Result.RegisterAdvancement ()
-                self.Advance ()
-
-            if self.CurrentToken.Type != TokenRightParenthesis:
-                return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                    "Expected ',' or ')'"
-                ))
-
-        else:
-            if self.CurrentToken.Type != TokenRightParenthesis:
-                return Result.Failure (InvalidSyntaxError (
-                    self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                    "Expected identifier or ')'"
-                ))
-
-        Result.RegisterAdvancement ()
-        self.Advance ()
-
-        if self.CurrentToken.Type != TokenArrow:
+        if self.CurrentToken.Type != TokenNewline:
             return Result.Failure (InvalidSyntaxError (
-                self.CurrentToken.StartPosition, self.CurrentToken.EndPosition,
-                "Expected '->'"
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
+                "Expected '->' or NEWLINE"
             ))
 
         Result.RegisterAdvancement ()
         self.Advance ()
-        NodeToReturn = Result.Register (self.Expression ())
+
+        Body = Result.Register (self.Statements ())
 
         if Result.Error:
             return Result
 
-        return Result.Success (ClassDefNode (
-            VarNameToken,
-            ArgNameTokens,
-            NodeToReturn
+        if not self.CurrentToken.Matches (TokenKeyword, 'done'):
+            return Result.Failure (InvalidSyntaxError (
+                self.CurrentToken.StartPosition,
+                self.CurrentToken.EndPosition,
+                "Expected 'done'"
+            ))
+
+        Result.RegisterAdvancement ()
+        self.Advance ()
+
+        return Result.Success (FunctionDefinitionNode (
+          VarNameToken,
+          ArgNameTokens,
+          Body,
+          True
         ))
 
-    def BinOp (self, _FunctionA, _Operators, _FunctionB = None):
-        if _FunctionB == None:
-            _FunctionB = _FunctionA
+    def BinOp (self, FunctionA, Operators, FunctionB = None):
+        if not FunctionB:
+            FunctionB = FunctionA
 
         Result = ParseResult ()
-        Left = Result.Register (_FunctionA ())
+        Left = Result.Register (FunctionA ())
 
         if Result.Error:
             return Result
 
-        while self.CurrentToken.Type in _Operators or (self.CurrentToken.Type, self.CurrentToken.Value) in _Operators:
+        while self.CurrentToken.Type in Operators or (self.CurrentToken.Type, self.CurrentToken.Value) in Operators:
             OperatorToken = self.CurrentToken
+
             Result.RegisterAdvancement ()
             self.Advance ()
-            Right = Result.Register (_FunctionB ())
+
+            Right = Result.Register (FunctionB ())
 
             if Result.Error:
                 return Result
@@ -1393,22 +1476,22 @@ class Parser:
 #######################################
 
 class RTResult:
-    def __init__(self):
+    def __init__ (self):
         self.Value = None
         self.Error = None
 
-    def Register (self, _Result):
-        self.Error = _Result.Error
+    def Register (self, Result):
+        self.Error = Result.Error
 
-        return _Result.Value
+        return Result.Value
 
-    def Success (self, _Value):
-        self.Value = _Value
+    def Success (self, Value):
+        self.Value = Value
 
         return self
 
-    def Failure (self, _Error):
-        self.Error = _Error
+    def Failure (self, Error):
+        self.Error = Error
 
         return self
 
@@ -1423,74 +1506,76 @@ class Value:
         self.SetPosition ()
         self.SetContext ()
 
-    def SetPosition (self, _StartPosition = None, _EndPosition = None):
-        self.StartPosition = _StartPosition
-        self.EndPosition = _EndPosition
+    def SetPosition (self, StartPosition = None, EndPosition = None):
+        self.StartPosition = StartPosition
+        self.EndPosition = EndPosition
 
         return self
 
-    def SetContext (self, _Context = None):
-        self.Context = _Context
+    def SetContext (self, Context = None):
+        self.Context = Context
 
         return self
 
-    def AddedTo (self, _Value):
-        return None, self.illegal_operation (_Value)
+    def AddedTo (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def SubtractedBy (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def SubtractedBy (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def MultipliedBy (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def MultipliedBy (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def DividedBy (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def DividedBy (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def PowerdBy (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def PoweredBy (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def GetComparisonEqual (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def GetComparisonEqual (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def GetComparisonNotEqual (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def GetComparisonNotEqual (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def GetComparisonLessThan (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def GetComparisonLessThan (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def GetComparisonGreaterThan (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def GetComparisonGreaterThan (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def GetComparisonLessThanEquals (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def GetComparisonLessThanEquals (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def GetComparisonGreaterThanEquals (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def GetComparisonGreaterThanEquals (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def AndedBy (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def AndedBy (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def OredBy (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def OredBy (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def Notted (self, _Value):
-        return None, self.IllegalOperation (_Value)
+    def Notted (self, Other):
+        return None, self.IllegalOperation (Other)
 
-    def Execute (self, _Args):
+    def Execute (self, Args):
         return RTResult ().Failure (self.IllegalOperation ())
 
     def Copy (self):
-        raise Exception ('No copy method defined')
+        Logs.Error ('No copy method defined!')
+        return None
 
     def IsTrue (self):
         return False
 
-    def IllegalOperation (self, _Other = None):
-        if not _Other:
-            _Other = self
+    def IllegalOperation (self, Other = None):
+        if not Other:
+            Other = self
 
         return RTError (
-            self.StartPosition, _Other.EndPosition,
+            self.StartPosition,
+            Other.EndPosition,
             'Illegal operation',
             self.Context
         )
@@ -1501,102 +1586,104 @@ class Number (Value):
 
         self.Value = Value
 
-    def AddedTo (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (self.Value + _Value.Value).SetContext (self.Context), None
+    def AddedTo (self, Other):
+        if isinstance (Other, Number):
+            return Number (self.Value + Other.Value).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def SubtractedBy (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (self.Value - _Value.Value).SetContext (self.Context), None
-
-        else:
-            return None, Value.IllegalOperation (self, _Value)
-
-    def MultipliedBy (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (self.Value * _Value.Value).SetContext (self.Context), None
+    def SubtractedBy (self, Other):
+        if isinstance (Other, Number):
+            return Number (self.Value - Other.Value).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def DividedBy (self, _Value):
-        if isinstance(_Value, Number):
-            if _Value.Value == 0:
+    def MultipliedBy (self, Other):
+        if isinstance (Other, Number):
+            return Number (self.Value * Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def DividedBy (self, Other):
+        if isinstance (Other, Number):
+            if Other.value == 0:
                 return None, RTError (
-                    other.StartPosition, other.EndPosition,
+                    Other.StartPosition,
+                    Other.EndPosition,
                     'Division by zero',
                     self.Context
                 )
 
-            return Number (self.Value / _Value.Value).SetContext (self.Context), None
+            return Number (self.Value / Other.Value).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def PowerdBy (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (self.Value ** _Value.Value).SetContext (self.Context), None
-
-        else:
-            return None, Value.IllegalOperation (self, _Value)
-
-    def GetComparisonEqual (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (int (self.Value == _Value.Value)).SetContext (self.Context), None
+    def PoweredBy (self, Other):
+        if isinstance (Other, Number):
+            return Number (self.Value ** Other.Value).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def GetComparisonNotEqual (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (int (self.Value != _Value.Value)).SetContext (self.Context), None
-
-        else:
-            return None, Value.IllegalOperation (self, _Value)
-
-    def GetComparisonLessThan (self, _Value):
-        if isinstance(_Value, Number):
-            return Number (int (self.Value < _Value.Value)).SetContext (self.Context), None
+    def GetComparisonEqual (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value == Other.Value)).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def GetComparisonGreaterThan (self, _Value):
-        if isinstance(_Value, Number):
-            return Number (int (self.Value > _Value.Value)).SetContext (self.Context), None
-
-        else:
-            return None, Value.IllegalOperation (self, _Value)
-
-    def GetComparisonLessThanEquals (self, _Value):
-        if isinstance(_Value, Number):
-            return Number (int (self.Value <= _Value.Value)).SetContext (self.Context), None
+    def GetComparisonNotEqual (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value != Other.Value)).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def GetComparisonGreaterThanEquals (self, _Value):
-        if isinstance(_Value, Number):
-            return Number (int (self.Value >= _Value.Value)).SetContext (self.Context), None
-
-        else:
-            return None, Value.IllegalOperation (self, _Value)
-
-    def AndedBy (self, _Value):
-        if isinstance(_Value, Number):
-            return Number (int (self.Value and _Value.Value)).SetContext (self.Context), None
+    def GetComparisonLessThan (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value < Other.Value)).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def OredBy (self, _Value):
-        if isinstance (_Value, Number):
-            return Number (int (self.Value or _Value.Value)).SetContext (self.Context), None
+    def GetComparisonGreaterThan (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value > Other.Value)).SetContext (self.Context), None
+
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
+
+    def GetComparisonLessThanEquals (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value <= Other.Value)).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def GetComparisonGreaterThanEquals (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value >= Other.Value)).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def AndedBy (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value and Other.Value)).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def OredBy (self, Other):
+        if isinstance (Other, Number):
+            return Number (int (self.Value or Other.Value)).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
 
     def Notted (self):
         return Number (1 if self.Value == 0 else 0).SetContext (self.Context), None
@@ -1611,8 +1698,16 @@ class Number (Value):
     def IsTrue (self):
         return self.Value != 0
 
-    def __repr__(self):
+    def __str__ (self):
         return str (self.Value)
+
+    def __repr__ (self):
+        return str (self.Value)
+
+Number.Null = Number (0)
+Number.FalseValue = Number (0)
+Number.TrueValue = Number (1)
+Number.Pi = Number (math.pi)
 
 class String (Value):
     def __init__ (self, Value):
@@ -1620,19 +1715,19 @@ class String (Value):
 
         self.Value = Value
 
-    def AddedTo (self, _Value):
-        if isinstance(_Value, String):
-            return String (self.Value + _Value.Value).SetContext (self.Context), None
+    def AddedTo (self, Other):
+        if isinstance (Other, String):
+            return String (self.Value + Other.Value).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def MultipliedBy (self, _Value):
-        if isinstance(_Value, Number):
-            return String (self.Value * _Value.Value).SetContext (self.Context), None
+    def MultipliedBy (self, Other):
+        if isinstance (Other, Number):
+            return String (self.Value * Other.Value).SetContext (self.Context), None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
     def IsTrue (self):
         return len (self.Value) > 0
@@ -1644,9 +1739,11 @@ class String (Value):
 
         return Copy
 
+    def __str__ (self):
+        return self.Value
+
     def __repr__ (self):
-        #return f'"{self.Value}"'
-        return f'{self.Value}'
+        return f'"{self.Value}"'
 
 class List (Value):
     def __init__ (self, Elements):
@@ -1654,185 +1751,686 @@ class List (Value):
 
         self.Elements = Elements
 
-    def AddedTo (self, _Value):
+    def AddedTo (self, Other):
         NewList = self.Copy ()
-        NewList.Elements.append (_Value)
+        NewList.Elements.append (Other)
 
         return NewList, None
 
-    def SubtractedBy (self, _Value):
-        if isinstance (_Value, Number):
+    def SubtractedBy (self, Other):
+        if isinstance (Other, Number):
             NewList = self.Copy ()
 
             try:
-                NewList.Elements.pop (_Value.Value)
+                NewList.Elements.pop (Other.Value)
 
                 return NewList, None
 
             except:
                 return None, RTError (
-                    _Value.StartPosition, _Value.EndPosition,
+                    Other.StartPosition,
+                    Other.EndPosition,
                     'Element at this index could not be removed from list because index is out of bounds',
                     self.Context
                 )
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def MultipliedBy (self, _Value):
-        if isinstance (_Value, List):
+    def MultipliedBy (self, Other):
+        if isinstance (Other, List):
             NewList = self.Copy ()
-            NewList.Elements.extend (_Value.Elements)
+            NewList.Elements.extend (Other.Elements)
 
             return NewList, None
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
-    def DividedBy (self, _Value):
-        if isinstance (_Value, Number):
+    def DividedBy (self, Other):
+        if isinstance (Other, Number):
             try:
-                return self.Elements[_Value.Value], None
+                return self.Elements[Other.Value], None
 
             except:
                 return None, RTError (
-                    _Value.StartPosition, _Value.EndPosition,
+                    Other.StartPosition,
+                    Other.EndPosition,
                     'Element at this index could not be retrieved from list because index is out of bounds',
                     self.Context
                 )
 
         else:
-            return None, Value.IllegalOperation (self, _Value)
+            return None, Value.IllegalOperation (self, Other)
 
     def Copy (self):
-        Copy = List (self.Elements[:])
+        Copy = List (self.Elements)
         Copy.SetPosition (self.StartPosition, self.EndPosition)
         Copy.SetContext (self.Context)
 
         return Copy
 
-    def __repr__(self):
+    def __str__ (self):
         return f'[{", ".join ([str (Element) for Element in self.Elements])}]'
+        #return ', '.join ([str (Element) for Element in self.Elements])
 
-class Function (Value):
-    def __init__ (self, Name, BodyNode, ArgNames):
+    def __repr__ (self):
+        return f'[{", ".join ([repr (Element) for Element in self.Elements])}]'
+
+class BaseFunction (Value):
+    def __init__ (self, Name):
         super ().__init__ ()
-        self.Name = Name or '<anonymous>'
-        self.BodyNode = BodyNode
-        self.ArgNames = ArgNames
 
-    def Execute (self, _Args):
-        Result = RTResult ()
-        NewInterpreter = Interpreter ()
-        NewContext = Context (self.Name, self.Context, self.StartPosition)
+        self.Name = Name or '<anonymous>'
+
+    def GenerateNewContext (self):
+        NewContext = ShexContext (self.Name, self.Context, self.StartPosition)
         NewContext.SymbolTable = SymbolTable (NewContext.Parent.SymbolTable)
 
-        if len (_Args) > len (self.ArgNames):
-            return Result.Failure (RTError (
-                self.StartPosition, self.EndPosition,
-                f"{len (_Args) - len (self.ArgNames)} too many args passed into '{self.Name}'",
-                self.Context
-            ))
+        return NewContext
 
-        if len (_Args) < len (self.ArgNames):
-            return Result.Failure (RTError (
-                self.StartPosition, self.EndPosition,
-                f"{len (self.ArgNames) - len (_Args)} too few args passed into '{self.Name}'",
-                self.Context
-            ))
-
-        for I in range (len (_Args)):
-            ArgName = self.ArgNames[I]
-            ArgValue = _Args[I]
-            ArgValue.SetContext (NewContext)
-            NewContext.SymbolTable.Set (ArgName, ArgValue)
-
-        Value = Result.Register (NewInterpreter.Visit (self.BodyNode, NewContext))
-
-        if Result.Error:
-            return Result
-
-        return Result.Success  (Value)
-
-    def Copy (self):
-        Copy = Function (self.Name, self.BodyNode, self.ArgNames)
-        Copy.SetContext (self.Context)
-        Copy.SetPosition (self.StartPosition, self.EndPosition)
-
-        return Copy
-
-    def __repr__ (self):
-        #return f"<task {self.Name}>"
-        return ''
-
-class Class (Value):
-    def __init__ (self, Name, BodyNode, ArgNames):
-        super ().__init__ ()
-
-        self.Name = Name or '<anonymous>'
-        self.BodyNode = BodyNode
-        self.ArgNames = ArgNames
-
-    def Execute (self, _Args):
+    def CheckArgs (self, TakenArgs, GivenArgs):
         Result = RTResult ()
-        self.Interpreter = Interpreter ()
-        self.Context = Context (self.Name, self.Context, self.StartPosition)
-        self.Context.SymbolTable = SymbolTable (self.Context.Parent.SymbolTable)
 
-        if len (_Args) > len (self.ArgNames):
+        if len (GivenArgs) > len (TakenArgs):
             return Result.Failure (RTError (
-                self.StartPosition, self.EndPosition,
-                f"{len (_Args) - len (self.ArgNames)} too many args passed into '{self.Name}'",
+                self.StartPosition,
+                self.EndPosition,
+                f'{len (GivenArgs) - len (TakenArgs)} too many args passed into {self}',
                 self.Context
             ))
 
-        if len (_Args) < len (self.ArgNames):
+        if len (GivenArgs) < len (TakenArgs):
             return Result.Failure (RTError (
-                self.StartPosition, self.EndPosition,
-                f"{len (self.ArgNames) - len (_Args)} too few args passed into '{self.Name}'",
+                self.StartPosition,
+                self.EndPosition,
+                f'{len (TakenArgs) - len (GivenArgs)} too few args passed into {self}',
                 self.Context
             ))
 
-        for I in range (len (_Args)):
-            ArgName = self.ArgNames[I]
-            ArgValue = _Args[I]
-            ArgValue.SetContext (NewContext)
-            self.Context.SymbolTable.Set (ArgName, ArgValue)
+        return Result.Success (None)
 
-        Value = Result.Register (self.Interpreter.Visit (self.BodyNode, self.Context))
+    def PopulateArgs (self, TakenArgs, GivenArgs, ExecuteContext):
+        for I in range (len (GivenArgs)):
+            TakenArg = TakenArgs[I]
+            GivenArg = GivenArgs[I]
+
+            GivenArg.SetContext (ExecuteContext)
+            ExecuteContext.SymbolTable.Set (TakenArg, GivenArg)
+
+    def CheckAndPopulateArgs (self, TakenArgs, GivenArgs, ExecuteContext):
+        Result = RTResult ()
+
+        Result.Register (self.CheckArgs (TakenArgs, GivenArgs))
 
         if Result.Error:
             return Result
 
-        return Result.Success  (Value)
+        self.PopulateArgs (TakenArgs, GivenArgs, ExecuteContext)
+
+        return Result.Success (None)
+
+class Function (BaseFunction):
+    def __init__ (self, Name, BodyNode, TakenArgs, ShouldReturnNull):
+        super ().__init__ (Name)
+
+        self.BodyNode = BodyNode
+        self.TakenArgs = TakenArgs
+        self.ShouldReturnNull = ShouldReturnNull
+
+    def Execute (self, GivenArgs):
+        Result = RTResult ()
+        Interpreter = ShexInterpreter ()
+
+        ExecuteContext = self.GenerateNewContext ()
+
+        Result.Register (self.CheckAndPopulateArgs (self.TakenArgs, GivenArgs, ExecuteContext))
+
+        if Result.Error:
+            return Result
+
+        Value = Result.Register (Interpreter.Visit (self.BodyNode, ExecuteContext))
+
+        if Result.Error:
+            return Result
+
+        return Result.Success (Number.Null if self.ShouldReturnNull else Value)
 
     def Copy (self):
-        Copy = Function (self.Name, self.BodyNode, self.ArgNames)
+        Copy = Function (self.Name, self.BodyNode, self.TakenArgs, self.ShouldReturnNull)
+        Copy.SetPosition (self.StartPosition, self.EndPosition)
+        Copy.SetContext (self.Context)
+
+        return Copy
+
+    def __repr__ (self):
+        return f'<function {self.Name}>'
+
+class BuiltInFunction (BaseFunction):
+    def __init__ (self, Name):
+        super ().__init__ (Name)
+
+    def Execute (self, Args):
+        Result = RTResult ()
+        ExecuteContext = self.GenerateNewContext ()
+
+        MethodName = f'Execute{self.Name}'
+        Method = getattr (self, MethodName, self.NoVisitMethod)
+
+        Result.Register (self.CheckAndPopulateArgs (Method.TakenArgs, Args, ExecuteContext))
+
+        if Result.Error:
+            return Result
+
+        ReturnValue = Result.Register (Method (ExecuteContext))
+
+        if Result.Error:
+            return Result
+
+        return Result.Success (ReturnValue)
+
+    def NoVisitMethod (self, Node, Context):
+        Logs.Error (f'No Execute{self.Name} method defined')
+
+    def Copy (self):
+        Copy = BuiltInFunction (self.Name)
         Copy.SetContext (self.Context)
         Copy.SetPosition (self.StartPosition, self.EndPosition)
 
         return Copy
 
-    def AddObject (self, _Name, _Node):
-        self.Context.SymbolTable.Set (_Name, _Node)
-
     def __repr__ (self):
-        #return f"<task {self.Name}>"
-        return ''
+        return f'<built-in function {self.Name}>'
 
-class Dict (Value):
-    def __init__ (self, Elements):
-        super ().__init__ ()
+    def ExecuteImport (self, ExecuteContext):
+        FilePath = ExecuteContext.SymbolTable.Get ('File')
 
-        self.Elements = Elements
+        if not isinstance (FilePath, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
 
-class Class (Value):
-    def __init__ (self, Name, Values, Functions):
-        super ().__init__ ()
+        FilePath = str (FilePath.Value).strip ()
 
-        self.Name = Name
-        self.Values = Values
-        self.Functions = Functions
+        if not FilePath.endswith ('.shex'):
+            FilePath += '.shex'
+
+        try:
+            with open (FilePath, 'r') as File:
+                Data = File.read ()
+
+        except:
+            try:
+                FilePath = Path.format (Path)
+
+                with open (FilePath, 'r') as File:
+                    Data = File.read ()
+
+                Run (FilePath, Data)
+
+            except:
+                return Result.Failure (RTError (
+                    self.StartPosition,
+                    self.EndPosition,
+                    f"Cannot open file: '{Args[0]}'",
+                    ExecuteContext
+                ))
+
+        Run (FilePath, Data)
+
+        return RTResult ().Success (Number.Null)
+    ExecuteImport.TakenArgs = ['File']
+
+    def ExecutePrint (self, ExecuteContext):
+        print(str (ExecuteContext.SymbolTable.Get ('Value')))
+
+        return RTResult ().Success (Number.Null)
+    ExecutePrint.TakenArgs = ['Value']
+
+    def ExecuteInput (self, ExecuteContext):
+        Text = input ()
+
+        return RTResult ().Success (String (Text))
+    ExecuteInput.TakenArgs = []
+
+    def ExecuteInputPrompt (self, ExecuteContext):
+        Text = input (str (ExecuteContext.SymbolTable.Get ('Prompt')))
+
+        return RTResult ().Success (String (Text))
+    ExecuteInputPrompt.TakenArgs = ['Prompt']
+
+    def ExecuteClear (self, ExecuteContext):
+        os.system ('cls' if os.name == 'nt' else 'clear')
+
+        return RTResult ().Success (Number.Null)
+    ExecuteClear.TakenArgs = []
+
+    def ExecuteIsNumber (self, ExecuteContext):
+        IsNumber = isinstance (ExecuteContext.SymbolTable.Get ('Value'), Number)
+
+        return RTResult ().Success (Number.TrueValue if IsNumber else Number.FalseValue)
+    ExecuteIsNumber.TakenArgs = ['Value']
+
+    def ExecuteIsString (self, ExecuteContext):
+        IsString = isinstance (ExecuteContext.SymbolTable.Get ('Value'), String)
+
+        return RTResult ().Success (Number.TrueValue if IsString else Number.FalseValue)
+    ExecuteIsString.TakenArgs = ['Value']
+
+    def ExecuteIsList (self, ExecuteContext):
+        IsList = isinstance (ExecuteContext.SymbolTable.Get ('value'), List)
+
+        return RTResult ().Success (Number.TrueValue if IsList else Number.FalseValue)
+    ExecuteIsList.TakenArgs = ['Value']
+
+    def ExecuteIsFunction (self, ExecuteContext):
+        IsFunction = isinstance (ExecuteContext.SymbolTable.Get ('value'), BaseFunction)
+
+        return RTResult ().Success (Number.TrueValue if IsFunction else Number.FalseValue)
+    ExecuteIsFunction.TakenArgs = ['Value']
+
+    def ExecuteAppend (self, ExecuteContext):
+        Target = ExecuteContext.SymbolTable.Get ('List')
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Target, List):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be list',
+                ExecuteContext
+            ))
+
+        Target.Elements.append (Value)
+        return RTResult ().Success(Number.Null)
+    ExecuteAppend.TakenArgs = ['List', 'Value']
+
+    def ExecutePop (self, ExecuteContext):
+        Target = ExecuteContext.SymbolTable.Get ('List')
+        Index = ExecuteContext.SymbolTable.Get ('Index')
+
+        if not isinstance (Target, List):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be list',
+                ExecuteContext
+            ))
+
+        if not isinstance (Index, Number):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Second argument must be number',
+                ExecuteContext
+            ))
+
+        try:
+            Element = Target.Elements.pop (Index.Value)
+
+        except:
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Element at this index could not be removed from list because index is out of bounds',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (Element)
+    ExecutePop.TakenArgs = ['List', 'Index']
+
+    def ExecuteExtend (self, ExecuteContext):
+        ListA = ExecuteContext.SymbolTable.Get ('ListA')
+        ListB = ExecuteContext.SymbolTable.Get ('ListB')
+
+        if not isinstance (ListA, List):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a list',
+                ExecuteContext
+            ))
+
+        if not isinstance (ListB, List):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Second argument must be a list',
+                ExecuteContext
+            ))
+
+        ListA.Elements.extend (ListB.Elements)
+
+        return RTResult ().Success(Number.Null)
+    ExecuteExtend.TakenArgs = ['ListA', 'ListB']
+
+    def ExecuteGet (self, ExecuteContext):
+        Target = ExecuteContext.SymbolTable.Get ('List')
+        Index = ExecuteContext.SymbolTable.Get ('Index')
+
+        if not isinstance (Target, List):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a list',
+                ExecuteContext
+            ))
+
+        if not isinstance (Index, Number):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Second argument must be a number',
+                ExecuteContext
+            ))
+
+        try:
+            Value = Target.Elements[Index.Value]
+
+            if isinstance (Value, String):
+                Value = String (Value)
+
+            elif isinstance (Value, Number):
+                Value = Number (Value)
+
+            else:
+                Value = List (Value)
+
+            return RTResult ().Success (Value)
+
+        except IndexError:
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Could not get element at that index',
+                ExecuteContext
+            ))
+    ExecuteGet.TakenArgs = ['List', 'Index']
+
+    def ExecuteToInt (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        try:
+            return RTResult ().Success (Number (int (Value.Value)))
+
+        except:
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                f'Cannot convert given value ({str (Value.Value)}) to an int!',
+                ExecuteContext
+            ))
+    ExecuteToInt.TakenArgs = ['Value']
+
+    def ExecuteToString (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        try:
+            return RTResult ().Success (String (str (Value.Value)))
+
+        except:
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                f'Cannot convert given value ({str (Value.Value)}) to a string!',
+                ExecuteContext
+            ))
+    ExecuteToString.TakenArgs = ['Value']
+
+    def ExecuteIsOdd (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, Number):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be an int',
+                ExecuteContext
+            ))
+
+        if int (Value.Value) % 2 == 0:
+            return RTResult ().Success (Number (0))
+
+        elif int (Value.Value) % 2 == 1:
+            return RTResult ().Success (Number (1))
+    ExecuteIsOdd.TakenArgs = ['Value']
+
+    def ExecuteIsEven (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, Number):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be an int',
+                ExecuteContext
+            ))
+
+        if int (Value.Value) % 2 == 0:
+            return RTResult ().Success (Number (1))
+
+        elif int (Value.Value) % 2 == 1:
+            return RTResult ().Success (Number (0))
+    ExecuteIsEven.TakenArgs = ['Value']
+
+    def ExecuteLower (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (String (str (Value.Value).lower ()))
+    ExecuteLower.TakenArgs = ['Value']
+
+    def ExecuteUpper (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (String (str (Value.Value).upper ()))
+    ExecuteUpper.TakenArgs = ['Value']
+
+    def ExecuteRead (self, ExecuteContext):
+        Path = ExecuteContext.SymbolTable.Get ('Path')
+
+        if not isinstance (Path, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
+
+        Data = ''
+        if Path:
+            with open (Path, 'r') as File:
+                Data = File.read ()
+
+        return RTResult ().Success (String (Data))
+    ExecuteRead.TakenArgs = ['Path']
+
+    def ExecuteWrite (self, ExecuteContext):
+        Path = ExecuteContext.SymbolTable.Get ('Path')
+        Mode = ExecuteContext.SymbolTable.Get ('Mode')
+        Content = ExecuteContext.SymbolTable.Get ('Content')
+
+        if not isinstance (Path, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
+
+        if not isinstance (Mode, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Second argument must be a string',
+                ExecuteContext
+            ))
+
+        if not isinstance (Content, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Third argument must be a string',
+                ExecuteContext
+            ))
+
+        if Path and Mode:
+            with open (Path, Mode) as File:
+                File.write (Content)
+
+        return RTResult ().Success (Number (Number.TrueValue))
+    ExecuteWrite.TakenArgs = ['Path', 'Mode', 'Content']
+
+    def ExecuteSplit (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('String')
+        Factor = ExecuteContext.SymbolTable.Get ('Factor')
+
+        if not isinstance (Value, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
+
+        if not isinstance (Factor, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Second argument must be a string',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (List (str (Value.Value).split (str (Factor.Value))))
+    ExecuteSplit.TakenArgs = ['String', 'Factor']
+
+    def ExecuteJoin (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('String')
+        Factor = ExecuteContext.SymbolTable.Get ('Factor')
+
+        if not isinstance (Value, List):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a list',
+                ExecuteContext
+            ))
+
+        if not isinstance (Factor, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'Second argument must be a string',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (String (str (Factor.Value).join (Value.Elements)))
+    ExecuteJoin.TakenArgs = ['List', 'Factor']
+
+    def ExecuteLength (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if isinstance (Value, List):
+            return RTResult ().Success (Number (len (Value.Elements)))
+
+        else:
+            return RTResult ().Success (Number (len (Value.Value)))
+    ExecuteLength.TakenArgs = ['Value']
+
+    def ExecuteEval (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, String):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a string',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (Number (eval (str (Value.Value))))
+    ExecuteEval.TakenArgs = ['Value']
+
+    def ExecuteSquareRoot (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, Number):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a number',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (Number (math.sqrt (Value.Value)))
+    ExecuteSquareRoot.TakenArgs = ['Value']
+
+    def ExecuteType (self, ExecuteContext):
+        Type = type (ExecuteContext.SymbolTable.Get ('Value')).__name__
+
+        return RTResult ().Success (String (str (Type)))
+    ExecuteType.TakenArgs = ['Value']
+
+    def ExecuteRound (self, ExecuteContext):
+        Value = ExecuteContext.SymbolTable.Get ('Value')
+
+        if not isinstance (Value, Number):
+            return RTResult ().Failure (RTError (
+                self.StartPosition,
+                self.EndPosition,
+                'First argument must be a number',
+                ExecuteContext
+            ))
+
+        return RTResult ().Success (Number (round (float (Value.Value))))
+    ExecuteRound.TakenArgs = ['Value']
+
+BuiltInFunction.Import      = BuiltInFunction ('Import')
+BuiltInFunction.Print       = BuiltInFunction ('Print')
+BuiltInFunction.Input       = BuiltInFunction ('Input')
+BuiltInFunction.InputPrompt = BuiltInFunction ('InputPrompt')
+BuiltInFunction.Clear       = BuiltInFunction ('Clear')
+BuiltInFunction.IsNumber    = BuiltInFunction ('IsNumber')
+BuiltInFunction.IsString    = BuiltInFunction ('IsString')
+BuiltInFunction.IsList      = BuiltInFunction ('IsList')
+BuiltInFunction.IsFunction  = BuiltInFunction ('IsFunction')
+BuiltInFunction.Append      = BuiltInFunction ('Append')
+BuiltInFunction.Pop         = BuiltInFunction ('Pop')
+BuiltInFunction.Extend      = BuiltInFunction ('Extend')
+BuiltInFunction.Get         = BuiltInFunction ('Get')
+BuiltInFunction.ToInt       = BuiltInFunction ('ToInt')
+BuiltInFunction.ToString    = BuiltInFunction ('ToString')
+BuiltInFunction.IsOdd       = BuiltInFunction ('IsOdd')
+BuiltInFunction.IsEven      = BuiltInFunction ('IsEven')
+BuiltInFunction.Lower       = BuiltInFunction ('Lower')
+BuiltInFunction.Upper       = BuiltInFunction ('Upper')
+BuiltInFunction.Read        = BuiltInFunction ('Read')
+BuiltInFunction.Write       = BuiltInFunction ('Write')
+BuiltInFunction.Split       = BuiltInFunction ('Split')
+BuiltInFunction.Join        = BuiltInFunction ('Join')
+BuiltInFunction.Length      = BuiltInFunction ('Length')
+BuiltInFunction.Eval        = BuiltInFunction ('Eval')
+BuiltInFunction.SquareRoot  = BuiltInFunction ('SquareRoot')
+BuiltInFunction.Type        = BuiltInFunction ('Type')
+BuiltInFunction.Round       = BuiltInFunction ('Round')
 
 
 
@@ -1840,11 +2438,11 @@ class Class (Value):
 # CONTEXT
 #######################################
 
-class Context:
-    def __init__(self, DisplayName, Parent = None, ParentEntryPos = None):
+class ShexContext:
+    def __init__ (self, DisplayName, Parent = None, ParentEntryPosition = None):
         self.DisplayName = DisplayName
         self.Parent = Parent
-        self.ParentEntryPos = ParentEntryPos
+        self.ParentEntryPosition = ParentEntryPosition
         self.SymbolTable = None
 
 
@@ -1858,19 +2456,19 @@ class SymbolTable:
         self.Symbols = {}
         self.Parent = Parent
 
-    def Get (self, _Name):
-        Value = self.Symbols.get (_Name, None)
+    def Get (self, Name):
+        Value = self.Symbols.get (Name, None)
 
         if Value == None and self.Parent:
-            return self.Parent.Get (_Name)
+            return self.Parent.Get (Name)
 
         return Value
 
-    def Set (self, _Name, _Value):
-        self.Symbols[_Name] = _Value
+    def Set (self, Name, Value):
+        self.Symbols[Name] = Value
 
-    def Remove (self, _Name):
-        del self.Symbols[_Name]
+    def Remove (self, Name):
+        del self.Symbols[Name]
 
 
 
@@ -1878,220 +2476,192 @@ class SymbolTable:
 # INTERPRETER
 #######################################
 
-class Interpreter:
-    def Visit (self, _Node, _Context):
-        MethodName = f'Visit{type (_Node).__name__}'
+class ShexInterpreter:
+    def Visit (self, Node, Context):
+        MethodName = f'Visit{type (Node).__name__}'
         Method = getattr (self, MethodName, self.NoVisitMethod)
 
-        return Method (_Node, _Context)
+        return Method (Node, Context)
 
-    def NoVisitMethod (self, _Node, _Context):
-        raise Exception (f'No Visit{type (_Node).__name__} method defined')
+    def NoVisitMethod (self, Node, Context):
+        Logs.Error (f'No Visit{type (Node).__name__} method defined')
 
-    def VisitNumberNode (self, _Node, _Context):
-        return RTResult ().Success  (
-            Number (_Node.Token.Value).SetContext (
-                _Context).SetPosition (_Node.StartPosition, _Node.EndPosition)
+        return None
+
+    def VisitNumberNode (self, Node, Context):
+        return RTResult ().Success (
+          Number (Node.Token.Value).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
         )
 
-    def VisitStringNode (self, _Node, _Context):
-        return RTResult ().Success  (
-            String (_Node.Token.Value).SetContext (
-                _Context).SetPosition (_Node.StartPosition, _Node.EndPosition)
+    def VisitStringNode (self, Node, Context):
+        return RTResult ().Success(
+          String (Node.Token.Value).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
         )
 
-    def VisitListNode (self, _Node, _Context):
+    def VisitListNode (self, Node, Context):
         Result = RTResult ()
         Elements = []
 
-        for ElementNode in _Node.ElementNodes:
-            Elements.append (Result.Register (self.Visit (ElementNode, _Context)))
+        for ElementNode in Node.ElementNodes:
+            Elements.append (Result.Register (self.Visit (ElementNode, Context)))
 
             if Result.Error:
                 return Result
 
         return Result.Success (
-            List (Elements).SetContext (_Context).SetPosition (
-                _Node.StartPosition, _Node.EndPosition)
+          List (Elements).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
         )
 
-    def VisitVarAccessNode (self, _Node, _Context):
+    def VisitVarAccessNode (self, Node, Context):
         Result = RTResult ()
-        VarName = _Node.VarNameToken.Value
-        Value = _Context.SymbolTable.Get (VarName)
+        VarName = Node.VarNameToken.Value
+        Value = Context.SymbolTable.Get (VarName)
 
         if not Value:
             return Result.Failure (RTError (
-                _Node.StartPosition, _Node.EndPosition,
-                f"'{VarName}' is not defined",
-                _Context
+              Node.StartPosition,
+              Node.EndPosition,
+              f"'{VarName}' is not defined",
+              Context
             ))
 
-        Value = Value.Copy ().SetPosition (_Node.StartPosition, _Node.EndPosition)
+        Value = Value.Copy ().SetPosition (Node.StartPosition, Node.EndPosition).SetContext (Context)
         return Result.Success (Value)
 
-    def VisitVarAssignNode (self, _Node, _Context):
+    def VisitVarAssignNode (self, Node, Context):
         Result = RTResult ()
-        VarName = _Node.VarNameToken.Value
-        Value = Result.Register (self.Visit (_Node.ValueNode, _Context))
+        VarName = Node.VarNameToken.Value
+        Value = Result.Register (self.Visit (Node.ValueNode, Context))
 
         if Result.Error:
             return Result
 
-        _Context.SymbolTable.Set (VarName, Value)
-        #return Result.Success (Value)
-        return Result.Success  ('')
+        Context.SymbolTable.Set (VarName, Value)
 
-    def VisitBinOpNode (self, _Node, _Context):
+        return Result.Success (Value)
+
+    def VisitBinOpNode (self, Node, Context):
         Result = RTResult ()
-        Left = Result.Register (self.Visit (_Node.LeftNode, _Context))
+        Left = Result.Register (self.Visit (Node.LeftNode, Context))
 
         if Result.Error:
             return Result
 
-        Right = Result.Register (self.Visit (_Node.RightNode, _Context))
+        Right = Result.Register (self.Visit (Node.RightNode, Context))
 
         if Result.Error:
             return Result
 
-        if _Node.OperatorToken.Type == TokenPlus:
+        if Node.OperatorToken.Type == TokenPlus:
             _Result, Error = Left.AddedTo (Right)
 
-        elif _Node.OperatorToken.Type == TokenMinus:
+        elif Node.OperatorToken.Type == TokenMinus:
             _Result, Error = Left.SubtractedBy (Right)
 
-        elif _Node.OperatorToken.Type == TokenMultiply:
+        elif Node.OperatorToken.Type == TokenMultiply:
             _Result, Error = Left.MultipliedBy (Right)
 
-        elif _Node.OperatorToken.Type == TokenDivide:
+        elif Node.OperatorToken.Type == TokenDivide:
             _Result, Error = Left.DividedBy (Right)
 
-        elif _Node.OperatorToken.Type == TokenPower:
-            _Result, Error = Left.PowerdBy (Right)
+        elif Node.OperatorToken.Type == TokenPower:
+            _Result, Error = Left.PoweredBy (Right)
 
-        elif _Node.OperatorToken.Type == TokenEqualsEquals:
+        elif Node.OperatorToken.Type == TokenEqualsEquals:
             _Result, Error = Left.GetComparisonEqual (Right)
 
-        elif _Node.OperatorToken.Type == TokenNotEquals:
+        elif Node.OperatorToken.Type == TokenNotEquals:
             _Result, Error = Left.GetComparisonNotEqual (Right)
 
-        elif _Node.OperatorToken.Type == TokenLessThan:
+        elif Node.OperatorToken.Type == TokenLessThan:
             _Result, Error = Left.GetComparisonLessThan (Right)
 
-        elif _Node.OperatorToken.Type == TokenGreaterThan:
+        elif Node.OperatorToken.Type == TokenGreaterThan:
             _Result, Error = Left.GetComparisonGreaterThan (Right)
 
-        elif _Node.OperatorToken.Type == TokenLessThanEquals:
+        elif Node.OperatorToken.Type == TokenLessThanEquals:
             _Result, Error = Left.GetComparisonLessThanEquals (Right)
 
-        elif _Node.OperatorToken.Type == TokenGreaterThanEquals:
+        elif Node.OperatorToken.Type == TokenGreaterThanEquals:
             _Result, Error = Left.GetComparisonGreaterThanEquals (Right)
 
-        elif _Node.OperatorToken.Matches (TokenKeyword, 'and'):
+        elif Node.OperatorToken.Matches (TokenKeyword, 'and'):
             _Result, Error = Left.AndedBy (Right)
 
-        elif _Node.OperatorToken.Matches (TokenKeyword, 'or'):
+        elif Node.OperatorToken.Matches (TokenKeyword, 'or'):
             _Result, Error = Left.OredBy (Right)
 
         if Error:
             return Result.Failure (Error)
 
         else:
-            return Result.Success (_Result.SetPosition (_Node.StartPosition, _Node.EndPosition))
+            return Result.Success (_Result.SetPosition (Node.StartPosition, Node.EndPosition))
 
-    def VisitUnaryOpNode (self, _Node, _Context):
+    def VisitUnaryOpNode (self, Node, Context):
         Result = RTResult ()
-        xNumber = Result.Register (self.Visit (_Node.Node, _Context))
+        NumberValue = Result.Register (self.Visit (Node.Node, Context))
 
         if Result.Error:
             return Result
 
         Error = None
 
-        if _Node.OperatorToken.Type == TokenMinus:
-            xNumber, Error = xNumber.MultipliedBy (Number (-1))
+        if Node.OperatorToken.Type == TokenMinus:
+            NumberValue, Error = NumberValue.MultipliedBy (Number (-1))
 
-        elif _Node.OperatorToken.Matches (TokenKeyword, 'not'):
-            xNumber, Error = xNumber.Notted ()
+        elif Node.OperatorToken.Matches (TokenKeyword, 'not'):
+            NumberValue, Error = NumberValue.Notted ()
 
         if Error:
             return Result.Failure (Error)
 
         else:
-            return Result.Success (xNumber.SetPosition (_Node.StartPosition, _Node.EndPosition))
+            return Result.Success (NumberValue.SetPosition (Node.StartPosition, Node.EndPosition))
 
-    def VisitIfNode (self, _Node, _Context):
-        Result = RTResult()
+    def VisitIfNode(self, Node, Context):
+        Result = RTResult ()
 
-        for Condition, Expression in _Node.Cases:
-            ConditionValue = Result.Register (self.Visit (Condition, _Context))
+        for Condition, Expr, ShouldReturnNull in Node.Cases:
+            ConditionValue = Result.Register (self.Visit (Condition, Context))
 
             if Result.Error:
                 return Result
 
             if ConditionValue.IsTrue ():
-                ExpressionValue = Result.Register (self.Visit (Expression, _Context))
+                ExprValue = Result.Register (self.Visit (Expr, Context))
 
                 if Result.Error:
                     return Result
 
-                try:
-                    FunctionName = Expression.NodeToCall.VarNameToken.Value
-                    Args = []
-                    for Arg in Expression.ArgNodes:
-                        if isinstance (Arg, VarAccessNode):
-                            Args.append (Arg.VarNameToken.Value)
+                return Result.Success (Number.Null if ShouldReturnNull else ExprValue)
 
-                        elif isinstance (Arg, NumberNode):
-                            Args.append (str (Arg.Token.Value))
-
-                        elif isinstance (Arg, StringNode):
-                            Args.append (f'"{Arg.Token.Value}"')
-
-                    Args = ', '.join (Args)
-
-                    if FunctionName in GlobalSymbolTable.Symbols:
-                        xResult, xError = Run ('<SELF>', f'{FunctionName} ({Args})')
-
-                        if xError:
-                            Logs.Error (xError.AsString ())
-
-                        else:
-                            print (xResult)
-
-                except:
-                    pass
-
-                #return Result.Success (expr_value)
-                return Result.Success ('')
-
-        if _Node.ElseCase:
-            ElseValue = Result.Register (self.Visit (_Node.ElseCase, _Context))
+        if Node.ElseCase:
+            Expr, ShouldReturnNull = Node.ElseCase
+            ExprValue = Result.Register (self.Visit (Expr, Context))
 
             if Result.Error:
                 return Result
 
-            return Result.Success (ElseValue)
+            return Result.Success (Number.Null if ShouldReturnNull else ExprValue)
 
-        return Result.Success (None)
+        return Result.Success (Number.Null)
 
-    def VisitForNode (self, _Node, _Context):
+    def VisitForNode (self, Node, Context):
         Result = RTResult ()
         Elements = []
 
-        StartValue = Result.Register (self.Visit (_Node.StartValueNode, _Context))
+        StartValue = Result.Register (self.Visit (Node.StartValueNode, Context))
 
         if Result.Error:
             return Result
 
-        EndValue = Result.Register (self.Visit (_Node.EndValueNode, _Context))
+        EndValue = Result.Register (self.Visit (Node.EndValueNode, Context))
 
         if Result.Error:
             return Result
 
-        if _Node.StepValueNode:
-            StepValue = Result.Register (
-                self.Visit (_Node.StepValueNode, _Context))
+        if Node.StepValueNode:
+            StepValue = Result.Register (self.Visit (Node.StepValueNode, Context))
 
             if Result.Error:
                 return Result
@@ -2102,31 +2672,31 @@ class Interpreter:
         I = StartValue.Value
 
         if StepValue.Value >= 0:
-            def Condition (): return I < EndValue.Value
+            Condition = lambda: I < EndValue.Value
 
         else:
-            def Condition (): return I > EndValue.Value
+            Condition = lambda: I > EndValue.Value
 
         while Condition ():
-            _Context.SymbolTable.Set (_Node.VarNameToken.Value, Number (I))
+            Context.SymbolTable.Set (Node.VarNameToken.Value, Number (I))
             I += StepValue.Value
 
-            Elements.append (Result.Register (self.Visit (_Node.BodyNode, _Context)))
+            Elements.append (Result.Register (self.Visit (Node.BodyNode, Context)))
 
             if Result.Error:
                 return Result
 
         return Result.Success (
-            List (Elements).SetContext (_Context).SetPosition (
-                _Node.StartPosition, _Node.EndPosition)
+            Number.Null if Node.ShouldReturnNull else
+            List (Elements).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
         )
 
-    def VisitWhileNode (self, _Node, _Context):
+    def VisitWhileNode (self, Node, Context):
         Result = RTResult ()
         Elements = []
 
         while True:
-            Condition = Result.Register (self.Visit (_Node.ConditionNode, _Context))
+            Condition = Result.Register (self.Visit (Node.ConditionNode, Context))
 
             if Result.Error:
                 return Result
@@ -2134,174 +2704,52 @@ class Interpreter:
             if not Condition.IsTrue ():
                 break
 
-            Elements.append(Result.Register (self.Visit (_Node.BodyNode, _Context)))
+            Elements.append (Result.Register (self.Visit (Node.BodyNode, Context)))
 
             if Result.Error:
                 return Result
 
         return Result.Success (
-            List (Elements).SetContext (_Context).SetPosition (
-                _Node.StartPosition, _Node.EndPosition)
+            Number.Null if Node.ShouldReturnNull else
+            List (Elements).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
         )
 
-    def VisitFuncDefNode (self, _Node, _Context):
+    def VisitFunctionDefinitionNode (self, Node, Context):
         Result = RTResult ()
 
-        FuncName = _Node.VarNameToken.Value if _Node.VarNameToken else None
-        BodyNode = _Node.BodyNode
-        ArgNames = [ArgName.Value for ArgName in _Node.ArgNameTokens]
-        FuncValue = Function (FuncName, BodyNode, ArgNames).SetContext (
-            _Context).SetPosition (_Node.StartPosition, _Node.EndPosition)
+        FunctionName = Node.VarNameToken.Value if Node.VarNameToken else None
+        BodyNode = Node.BodyNode
+        TakenArgs = [TakenArg.Value for TakenArg in Node.ArgNameTokens]
+        FunctionValue = Function (FunctionName, BodyNode, TakenArgs, Node.ShouldReturnNull).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
 
-        if _Node.VarNameToken:
-            _Context.SymbolTable.Set (FuncName, FuncValue)
+        if Node.VarNameToken:
+            Context.SymbolTable.Set (FunctionName, FunctionValue)
 
-        return Result.Success (FuncValue)
+        return Result.Success (FunctionValue)
 
-    def VisitClassDefNode (self, _Node, _Context):
-        Result = RTResult ()
-
-        ClassName = _Node.VarNameToken.Value if _Node.VarNameToken else None
-        BodyNode = _Node.BodyNode
-        ArgNames = [ArgName.Value for ArgName in _Node.ArgNameTokens]
-        ClassValue = Class (ClassName, BodyNode, ArgNames).SetContext (
-            _Context).SetPosition (_Node.StartPosition, _Node.EndPosition)
-
-        if _Node.VarNameToken:
-            _Context.SymbolTable.Set (ClassName, ClassValue)
-
-        return Result.Success (ClassValue)
-
-    def VisitCallNode (self, _Node, _Context):
+    def VisitCallNode (self, Node, Context):
         Result = RTResult ()
         Args = []
 
-        ValueToCall = Result.Register (self.Visit (_Node.NodeToCall, _Context))
+        ValueToCall = Result.Register (self.Visit (Node.NodeToCall, Context))
 
         if Result.Error:
             return Result
 
-        ValueToCall = ValueToCall.Copy ().SetPosition (_Node.StartPosition, _Node.EndPosition)
+        ValueToCall = ValueToCall.Copy ().SetPosition (Node.StartPosition, Node.EndPosition)
 
-        for ArgNode in _Node.ArgNodes:
-            Args.append (Result.Register (self.Visit (ArgNode, _Context)))
+        for ArgNode in Node.ArgNodes:
+            Args.append (Result.Register (self.Visit (ArgNode, Context)))
 
             if Result.Error:
                 return Result
-
-        if _Node.NodeToCall.VarNameToken.Value == 'import':
-            Value = DefaultFunctions['import']['Body'][1 : len (DefaultFunctions['import']['Body']) - 1]
-            Values = Value.split ('::')
-            Path = str (Args[0])
-
-            if Values[0] == 'imp':
-                if Values[1] == 'path':
-                    try:
-                        with open (Path, 'r') as File:
-                            Data = File.read ()
-                            Lines = Data.split ('\n')
-
-                    except:
-                        try:
-                            Path = GlobalPath.format (Path)
-
-                            with open (Path, 'r') as File:
-                                Data = File.read ()
-                                Lines = Data.split ('\n')
-
-                            LoadFromFile (Path, Lines)
-
-                        except:
-                            return Result.Failure (RTError (
-                                _Node.StartPosition, _Node.EndPosition,
-                                f"Cannot open file: '{Args[0]}'",
-                                _Context
-                            ))
-
-                    LoadFromFile (Path, Lines)
-
-                    return Result.Success ('')
-
-        elif _Node.NodeToCall.VarNameToken.Value == 'read':
-            Value = DefaultFunctions['read']['Body'][1 : len (DefaultFunctions['read']['Body']) - 1]
-            Values = Value.split ('::')
-            Path = str (Args[0])
-
-            if Values[0] == 'read':
-                if Values[1] == 'path':
-                    try:
-                        with open (Path, 'r') as File:
-                            Data = File.read ()
-
-                    except:
-                        return Result.Failure (RTError (
-                            _Node.StartPosition, _Node.EndPosition,
-                            f"Cannot open file: '{Args[0]}'",
-                            _Context
-                        ))
-
-                    return Result.Success (String (Data))
-
-        elif _Node.NodeToCall.VarNameToken.Value == 'iseven':
-            Value = DefaultFunctions['iseven']['Body'][1 : len (DefaultFunctions['iseven']['Body']) - 1]
-            Values = Value.split ('::')
-            Value = int (str (Args[0]))
-
-            if Values[0] == 'iseven':
-                if Values[1] == 'number':
-                    if Value % 2 == 0:
-                        return Result.Success (Number (1))
-
-                    elif Value % 2 == 1:
-                        return Result.Success (Number (0))
-
-        elif _Node.NodeToCall.VarNameToken.Value == 'isodd':
-            Value = DefaultFunctions['isodd']['Body'][1 : len (DefaultFunctions['isodd']['Body']) - 1]
-            Values = Value.split ('::')
-            Value = int (str (Args[0]))
-
-            if Values[0] == 'isodd':
-                if Values[1] == 'number':
-                    if Value % 2 == 0:
-                        return Result.Success (Number (0))
-
-                    elif Value % 2 == 1:
-                        return Result.Success (Number (1))
-
-        elif _Node.NodeToCall.VarNameToken.Value == 'length':
-            Value = DefaultFunctions['length']['Body'][1 : len (DefaultFunctions['length']['Body']) - 1]
-            Values = Value.split ('::')
-            Value = len (str (Args[0]))
-
-            if Values[0] == 'length':
-                if Values[1] == 'value':
-                    return Result.Success (Number (Value))
-
-        elif _Node.NodeToCall.VarNameToken.Value == 'split':
-            Value = DefaultFunctions['split']['Body'][1 : len (DefaultFunctions['split']['Body']) - 1]
-            Values = Value.split ('::')
-            Value = str (Args[0]).split (str (Args[1]))
-
-            if Values[0] == 'split':
-                if Values[1] == 'string':
-                    if Values[2] == 'factor':
-                        return Result.Success (List (Value))
-
-        elif _Node.NodeToCall.VarNameToken.Value == 'join':
-            Value = DefaultFunctions['join']['Body'][1 : len (DefaultFunctions['join']['Body']) - 1]
-            Values = Value.split ('::')
-            ValueList = [Element for Element in Args[0].Elements]
-            Value = str (Args[1]).join (ValueList)
-
-            if Values[0] == 'join':
-                if Values[1] == 'list':
-                    if Values[2] == 'factor':
-                        return Result.Success (String (Value))
 
         ReturnValue = Result.Register (ValueToCall.Execute (Args))
 
         if Result.Error:
             return Result
+
+        ReturnValue = ReturnValue.Copy ().SetPosition (Node.StartPosition, Node.EndPosition).SetContext (Context)
 
         return Result.Success (ReturnValue)
 
@@ -2312,60 +2760,71 @@ class Interpreter:
 #######################################
 
 GlobalSymbolTable = SymbolTable ()
-GlobalSymbolTable.Set ('null', Number (0))
-GlobalSymbolTable.Set ('false', Number (0))
-GlobalSymbolTable.Set ('true', Number (1))
-GlobalSymbolTable.Set ('..', Number (0))
+GlobalSymbolTable.Set ('null', Number.Null)
+GlobalSymbolTable.Set ('false', Number.FalseValue)
+GlobalSymbolTable.Set ('true', Number.TrueValue)
+GlobalSymbolTable.Set ('pi', Number.Pi)
+GlobalSymbolTable.Set ('import', BuiltInFunction.Import)
+GlobalSymbolTable.Set ('print', BuiltInFunction.Print)
+GlobalSymbolTable.Set ('input', BuiltInFunction.Input)
+GlobalSymbolTable.Set ('inputp', BuiltInFunction.InputPrompt)
+GlobalSymbolTable.Set ('clear', BuiltInFunction.Clear)
+GlobalSymbolTable.Set ('cls', BuiltInFunction.Clear)
+GlobalSymbolTable.Set ('isnum', BuiltInFunction.IsNumber)
+GlobalSymbolTable.Set ('isstring', BuiltInFunction.IsString)
+GlobalSymbolTable.Set ('islist', BuiltInFunction.IsList)
+GlobalSymbolTable.Set ('istask', BuiltInFunction.IsFunction)
+GlobalSymbolTable.Set ('append', BuiltInFunction.Append)
+GlobalSymbolTable.Set ('pop', BuiltInFunction.Pop)
+GlobalSymbolTable.Set ('extend', BuiltInFunction.Extend)
+GlobalSymbolTable.Set ('get', BuiltInFunction.Get)
+GlobalSymbolTable.Set ('int', BuiltInFunction.ToInt)
+GlobalSymbolTable.Set ('string', BuiltInFunction.ToString)
+GlobalSymbolTable.Set ('isodd', BuiltInFunction.IsOdd)
+GlobalSymbolTable.Set ('iseven', BuiltInFunction.IsEven)
+GlobalSymbolTable.Set ('low', BuiltInFunction.Lower)
+GlobalSymbolTable.Set ('up', BuiltInFunction.Upper)
+GlobalSymbolTable.Set ('read', BuiltInFunction.Read)
+GlobalSymbolTable.Set ('write', BuiltInFunction.Write)
+GlobalSymbolTable.Set ('split', BuiltInFunction.Split)
+GlobalSymbolTable.Set ('join', BuiltInFunction.Join)
+GlobalSymbolTable.Set ('len', BuiltInFunction.Length)
+GlobalSymbolTable.Set ('eval', BuiltInFunction.Eval)
+GlobalSymbolTable.Set ('sqr', BuiltInFunction.SquareRoot)
+GlobalSymbolTable.Set ('typ', BuiltInFunction.Type)
+GlobalSymbolTable.Set ('rnd', BuiltInFunction.Round)
 
-def Run (_File, _Line):
-    xLexer = Lexer (_File, _Line)
-    Tokens, Error = xLexer.MakeTokens ()
+def Run (FileName, Code):
+    # Fix the code (Removes comments and none lines)
+    Lines = Code.split ('\n')
+    Finished = []
+
+    for Line in Lines:
+        if not Line.strip () or Line.isspace () or Line.strip ().startswith ('--'):
+            continue
+
+        Finished.append (Line)
+
+    Code = '\n'.join (Finished)
+
+    # Generate tokens
+    Lexer = ShexLexer (FileName, Code)
+    Tokens, Error = Lexer.Tokenize ()
 
     if Error:
         return None, Error
 
-    xParser = Parser (Tokens)
-    AST = xParser.Parse ()
+    # Generate AST
+    Parser = ShexParser (Tokens)
+    AST = Parser.Parse ()
 
     if AST.Error:
         return None, AST.Error
 
-    xInterpreter = Interpreter ()
-    xContext = Context ('<program>')
-    xContext.SymbolTable = GlobalSymbolTable
-    Result = xInterpreter.Visit (AST.Node, xContext)
+    # Run program
+    Interpreter = ShexInterpreter ()
+    Context = ShexContext ('<program>')
+    Context.SymbolTable = GlobalSymbolTable
+    Result = Interpreter.Visit (AST.Node, Context)
 
     return Result.Value, Result.Error
-
-def LoadFromFile (_Path, _Lines):
-    for Line in _Lines:
-        if Line == '' or Line in ' \n\t' or Line.startswith ('--'):
-            continue
-
-        xResult, xError = Run (_Path, Line)
-
-        if xError:
-            Logs.Error (xError.AsString ())
-            return
-
-        elif str (xResult) != '':
-            print (xResult)
-
-def LoadFunctions (_File, _Functions):
-    if isinstance (_Functions, str):
-        _Functions = [_Functions]
-
-    elif isinstance (_Functions, dict):
-        for Function in _Functions:
-            Name = Function
-            Function = _Functions[Function]
-            FunctionString = f"task {Name} ({', '.join (Function['Args'])}) -> {Function['Body']}"
-
-            Run (_File, FunctionString)
-
-        return
-
-    for Function in _Functions:
-        Run (_File, Function)
-
-LoadFunctions ('<self>', DefaultFunctions)

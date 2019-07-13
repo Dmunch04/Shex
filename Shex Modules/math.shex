@@ -10,7 +10,7 @@ task subtract (x, y) -> x - y
 task multiply (x, y) -> x * y
 task divide (x, y) -> x / y
 task power (x, y) -> x ^ y
-task hypotenuse (a, b) -> "square::(a ** 2) + (b ** 2)"
+task hypotenuse (a, b) -> sqr ((a ^ 2) + (b ^ 2))
 
 -- Uppercased (First letter) functions
 task Add (x, y) -> x + y
@@ -18,4 +18,4 @@ task Subtract (x, y) -> x - y
 task Multiply (x, y) -> x * y
 task Divide (x, y) -> x / y
 task Power (x, y) -> x ^ y
-task Hypotenuse (a, b) -> "square::(a ** 2) + (b ** 2)"
+task Hypotenuse (a, b) -> sqr ((a ^ 2) + (b ^ 2))

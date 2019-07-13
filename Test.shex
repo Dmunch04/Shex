@@ -1,1 +1,50 @@
-..
+var x = 10
+print (x)
+
+if x then
+  print ("Hello, World")
+done
+
+task test ()
+  print (isnum (x))
+  print (isstring (x))
+
+  import ('Shex Modules/math')
+  print (Add (1, 2))
+
+  print (sqr (100))
+  print (eval ("1+1"))
+
+  var b = eval ("1+1-1")
+  var c = string (b)
+  print (typ (b))
+  print (typ (c))
+
+  print (low ('HELLO'))
+  print (up ('hello'))
+
+  var d = input ()
+  var e = inputp ("Yeet: ")
+  if d then
+    print (d)
+  done
+
+  if e then
+    print (e)
+    print (low (e))
+  done
+
+  var f = hypotenuse (4, 3)
+  if f == 5.0 then
+    print (rnd (f))
+  elif f > 10.0 then
+    print (string (f))
+  else
+    print (f)
+  done
+done
+
+test ()
+
+print (test)
+print (isnum)
