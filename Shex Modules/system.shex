@@ -1,13 +1,9 @@
--- Place this in your scripts folder, or at:
--- C:\Users\*User*\AppData\Local\Programs\GravPack\Lib
--- And do:
--- import ('system.shex')
--- To import the functions
+-- Import with: imp ('system')
 
 -- Lowercased functions
-var mpath = "system::paths"
-task check (x) -> if x > 0 then print (true) else print (false)
+var pyPaths = `import sys;;sys.path`
+task check (x) -> if x > 0 do say (true) else say (false)
 
 -- Uppercased (First letter) functions
-var Mpath = "system::paths"
-task Check (x) -> if x > 0 then print (true) else print (false)
+var PyPaths = `import sys;;sys.path`
+task Check (x) -> if x > 0 do say (true) else say (false)

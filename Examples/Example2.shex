@@ -1,1 +1,1 @@
-task Test (x) -> if x then print (x) else print ('Whoops')
+task Test (x) -> if x do say (x) else say ('Whoops')

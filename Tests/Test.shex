@@ -1,0 +1,50 @@
+var x = 10
+print (x)
+
+if x then
+  say ("Hello, World")
+done
+
+task test ()
+  say (isnum (x))
+  say (isstr (x))
+
+  imp ('../Shex Modules/math')
+  say (Add (1, 2))
+
+  say (sqr (100))
+  say (eval ("1+1"))
+
+  var b = eval ("1+1-1")
+  var c = str (b)
+  say (typ (b))
+  say (typ (c))
+
+  say (low ('HELLO'))
+  say (up ('hello'))
+
+  var d = in ()
+  var e = inp ("Yeet: ")
+  if d do
+    say (d)
+  done
+
+  if e do
+    say (e)
+    say (low (e))
+  done
+
+  var f = hypotenuse (4, 3)
+  if f == 5.0 do
+    say (rnd (f))
+  elif f > 10.0 do
+    say (str (f))
+  else
+    say (f)
+  done
+done
+
+test ()
+
+say (test)
+say (isnum)

@@ -39,7 +39,6 @@ elif sys.platform == 'linux':
 #######################################
 
 from Errors import *
-from Types import List, String, Number, Function, BuiltInFunction
 
 import os
 import math
@@ -161,16 +160,17 @@ TokenLeftParenthesis        = 'LPAREN'
 TokenRightParenthesis       = 'RPAREN'
 TokenLeftSquareBracket      = 'LSQUARE'
 TokenRightSquareBracket     = 'RSQUARE'
-TokenEqualsEquals                       = 'EE'
-TokenNotEquals                          = 'NE'
-TokenLessThan                           = 'LT'
-TokenGreaterThan                        = 'GT'
+TokenEqualsEquals           = 'EE'
+TokenNotEquals              = 'NE'
+TokenLessThan               = 'LT'
+TokenGreaterThan            = 'GT'
 TokenLessThanEquals         = 'LTE'
-TokenGreaterThanEquals          = 'GTE'
-TokenComma                              = 'COMMA'
+TokenGreaterThanEquals      = 'GTE'
+TokenComma                  = 'COMMA'
 TokenArrow                  = 'ARROW'
 TokenNewline                = 'NEWLINE'
-TokenEndOfFile                          = 'EOF'
+TokenEmbed                  = 'EMBED'
+TokenEndOfFile              = 'EOF'
 
 Keywords = [
     'var',
@@ -185,7 +185,7 @@ Keywords = [
     'step',
     'while',
     'task',
-    'then',
+    'do',
     'done'
 ]
 
@@ -206,7 +206,7 @@ class Token:
         return self.Type == Type and self.Value == Value
 
     def __repr__ (self):
-        return f'{self.Type}:{Self.Value}' if self.Value else f'{self.Type}'
+        return f'{self.Type}:{self.Value}' if self.Value else f'{self.Type}'
 
 
 
@@ -246,6 +246,9 @@ class ShexLexer:
 
             elif self.CurrentChar in ('\'', '"'):
                 Tokens.append (self.MakeString ())
+
+            elif self.CurrentChar == '`':
+                Tokens.append (self.MakeEmbed ())
 
             elif self.CurrentChar == '+':
                 Tokens.append (Token (TokenPlus, StartPosition = self.Position))
@@ -365,6 +368,28 @@ class ShexLexer:
 
         return Token (TokenString, String, StartPosition, self.Position)
 
+    def MakeEmbed (self):
+        Embed = ''
+        StartPosition = self.Position.Copy ()
+
+        self.Advance ()
+
+        while self.CurrentChar != None and self.CurrentChar != '`':
+            if self.CurrentChar == ';':
+                self.Advance ()
+
+                if self.CurrentChar == ';':
+                    Embed += '\n'
+
+            else:
+                Embed += self.CurrentChar
+
+            self.Advance ()
+
+        self.Advance ()
+
+        return Token (TokenEmbed, Embed, StartPosition, self.Position)
+
     def MakeIdentifier (self):
         ID = ''
         StartPosition = self.Position.Copy ()
@@ -461,6 +486,16 @@ class NumberNode:
         return f'{self.Token}'
 
 class StringNode:
+    def __init__ (self, Token):
+        self.Token = Token
+
+        self.StartPosition = Token.StartPosition
+        self.EndPosition = Token.EndPosition
+
+    def __repr__ (self):
+        return f'{self.Token}'
+
+class EmbedNode:
     def __init__ (self, Token):
         self.Token = Token
 
@@ -879,6 +914,12 @@ class ShexParser:
 
             return Result.Success (StringNode (Token))
 
+        elif Token.Type == TokenEmbed:
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            return Result.Success (EmbedNode (Token))
+
         elif Token.Type == TokenIdentifier:
             Result.RegisterAdvancement ()
             self.Advance ()
@@ -1102,11 +1143,11 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'then'):
+        if not self.CurrentToken.Matches (TokenKeyword, 'do'):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'then'"
+                "Expected 'do'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1221,11 +1262,11 @@ class ShexParser:
         else:
             StepValue = None
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'then'):
+        if not self.CurrentToken.Matches (TokenKeyword, 'do'):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'then'"
+                "Expected 'do'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1277,11 +1318,11 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'then'):
+        if not self.CurrentToken.Matches (TokenKeyword, 'do'):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'then'"
+                "Expected 'do'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1441,7 +1482,9 @@ class ShexParser:
           VarNameToken,
           ArgNameTokens,
           Body,
-          True
+          # This here used to be True, but I changed it, so functions can now return
+          #True
+          False
         ))
 
     def BinOp (self, FunctionA, Operators, FunctionB = None):
@@ -1740,10 +1783,11 @@ class String (Value):
         return Copy
 
     def __str__ (self):
-        return self.Value
+        return str (self.Value)
 
     def __repr__ (self):
-        return f'"{self.Value}"'
+        #return f'"{self.Value}"'
+        return self.Value
 
 class List (Value):
     def __init__ (self, Elements):
@@ -1890,6 +1934,17 @@ class Function (BaseFunction):
             return Result
 
         Value = Result.Register (Interpreter.Visit (self.BodyNode, ExecuteContext))
+
+        if isinstance (Value, List):
+            if not Value.Elements:
+                self.ShouldReturnNull = True
+
+            else:
+                Value = Value.Elements[-1]
+
+        else:
+            if not Value.Value:
+                self.ShouldReturnNull = True
 
         if Result.Error:
             return Result
@@ -2494,9 +2549,56 @@ class ShexInterpreter:
         )
 
     def VisitStringNode (self, Node, Context):
-        return RTResult ().Success(
+        return RTResult ().Success (
           String (Node.Token.Value).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
         )
+
+    def VisitEmbedNode (self, Node, Context):
+        Global = GlobalSymbolTable.Symbols
+        Local = Context.SymbolTable.Symbols
+
+        Result = None
+        for Line in Node.Token.Value.split ('\n'):
+            try:
+                Result = eval (Line)
+
+            except:
+                Result = exec (Line)
+
+        if Result in (None, False):
+            Result = 0
+
+        elif Result == True:
+            Result = 1
+
+        if isinstance (Result, str):
+            return RTResult ().Success (
+                String (Result).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
+            )
+
+        elif isinstance (Result, int):
+            return RTResult ().Success (
+                Number (Result).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
+            )
+
+        elif isinstance (Result, list):
+            def Check (Items):
+                Elements = []
+                for Item in Items:
+                    if isinstance (Item, str):
+                        Elements.append (String (Item))
+
+                    elif isinstance (Item, int):
+                        Elements.append (Number (Item))
+
+                    elif isinstance (Item, list):
+                        Elements.append (Check (Item))
+
+                return Elements
+
+            return RTResult ().Success (
+                List (Check (Result)).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
+            )
 
     def VisitListNode (self, Node, Context):
         Result = RTResult ()
@@ -2764,14 +2866,14 @@ GlobalSymbolTable.Set ('null', Number.Null)
 GlobalSymbolTable.Set ('false', Number.FalseValue)
 GlobalSymbolTable.Set ('true', Number.TrueValue)
 GlobalSymbolTable.Set ('pi', Number.Pi)
-GlobalSymbolTable.Set ('import', BuiltInFunction.Import)
-GlobalSymbolTable.Set ('print', BuiltInFunction.Print)
-GlobalSymbolTable.Set ('input', BuiltInFunction.Input)
-GlobalSymbolTable.Set ('inputp', BuiltInFunction.InputPrompt)
+GlobalSymbolTable.Set ('imp', BuiltInFunction.Import)
+GlobalSymbolTable.Set ('say', BuiltInFunction.Print)
+GlobalSymbolTable.Set ('in', BuiltInFunction.Input)
+GlobalSymbolTable.Set ('inp', BuiltInFunction.InputPrompt)
 GlobalSymbolTable.Set ('clear', BuiltInFunction.Clear)
 GlobalSymbolTable.Set ('cls', BuiltInFunction.Clear)
 GlobalSymbolTable.Set ('isnum', BuiltInFunction.IsNumber)
-GlobalSymbolTable.Set ('isstring', BuiltInFunction.IsString)
+GlobalSymbolTable.Set ('isstr', BuiltInFunction.IsString)
 GlobalSymbolTable.Set ('islist', BuiltInFunction.IsList)
 GlobalSymbolTable.Set ('istask', BuiltInFunction.IsFunction)
 GlobalSymbolTable.Set ('append', BuiltInFunction.Append)
@@ -2779,9 +2881,9 @@ GlobalSymbolTable.Set ('pop', BuiltInFunction.Pop)
 GlobalSymbolTable.Set ('extend', BuiltInFunction.Extend)
 GlobalSymbolTable.Set ('get', BuiltInFunction.Get)
 GlobalSymbolTable.Set ('int', BuiltInFunction.ToInt)
-GlobalSymbolTable.Set ('string', BuiltInFunction.ToString)
-GlobalSymbolTable.Set ('isodd', BuiltInFunction.IsOdd)
-GlobalSymbolTable.Set ('iseven', BuiltInFunction.IsEven)
+GlobalSymbolTable.Set ('str', BuiltInFunction.ToString)
+#GlobalSymbolTable.Set ('isodd', BuiltInFunction.IsOdd)
+#GlobalSymbolTable.Set ('iseven', BuiltInFunction.IsEven)
 GlobalSymbolTable.Set ('low', BuiltInFunction.Lower)
 GlobalSymbolTable.Set ('up', BuiltInFunction.Upper)
 GlobalSymbolTable.Set ('read', BuiltInFunction.Read)
@@ -2790,9 +2892,9 @@ GlobalSymbolTable.Set ('split', BuiltInFunction.Split)
 GlobalSymbolTable.Set ('join', BuiltInFunction.Join)
 GlobalSymbolTable.Set ('len', BuiltInFunction.Length)
 GlobalSymbolTable.Set ('eval', BuiltInFunction.Eval)
-GlobalSymbolTable.Set ('sqr', BuiltInFunction.SquareRoot)
+#GlobalSymbolTable.Set ('sqr', BuiltInFunction.SquareRoot)
 GlobalSymbolTable.Set ('typ', BuiltInFunction.Type)
-GlobalSymbolTable.Set ('rnd', BuiltInFunction.Round)
+#GlobalSymbolTable.Set ('rnd', BuiltInFunction.Round)
 
 def Run (FileName, Code):
     # Fix the code (Removes comments and none lines)
@@ -2803,6 +2905,8 @@ def Run (FileName, Code):
         if not Line.strip () or Line.isspace () or Line.strip ().startswith ('--'):
             continue
 
+        Line = Line.split ('--')[0]
+
         Finished.append (Line)
 
     Code = '\n'.join (Finished)
@@ -2812,6 +2916,8 @@ def Run (FileName, Code):
     Tokens, Error = Lexer.Tokenize ()
 
     if Error:
+        Logs.Error (Error.AsString ())
+
         return None, Error
 
     # Generate AST
@@ -2819,6 +2925,8 @@ def Run (FileName, Code):
     AST = Parser.Parse ()
 
     if AST.Error:
+        Logs.Error (AST.Error.AsString ())
+
         return None, AST.Error
 
     # Run program
@@ -2826,5 +2934,8 @@ def Run (FileName, Code):
     Context = ShexContext ('<program>')
     Context.SymbolTable = GlobalSymbolTable
     Result = Interpreter.Visit (AST.Node, Context)
+
+    if Result.Error:
+        Logs.Error (Result.Error.AsString ())
 
     return Result.Value, Result.Error

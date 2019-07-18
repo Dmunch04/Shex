@@ -1,8 +1,4 @@
--- Place this in your scripts folder, or at:
--- C:\Users\*User*\AppData\Local\Programs\GravPack\Lib
--- And do:
--- import ('math.shex')
--- To import the functions
+-- Import with: imp ('math')
 
 -- Lowercased functions
 task add (x, y) -> x + y
@@ -10,7 +6,27 @@ task subtract (x, y) -> x - y
 task multiply (x, y) -> x * y
 task divide (x, y) -> x / y
 task power (x, y) -> x ^ y
-task hypotenuse (a, b) -> sqr ((a ^ 2) + (b ^ 2))
+task sqr (x) -> `import math;;math.sqrt (int (Local['x'].Value))`
+task rnd (x) -> `round (float (Local['x'].Value))`
+task hypotenuse (x, y) -> sqr ((x ^ 2) + (y ^ 2))
+task isodd (x)
+  var res = 1
+
+  if `int (Local['x'].Value) % 2 == 0` do
+    var res = 0
+  done
+
+  res
+done
+task iseven (x)
+  var res = 0
+
+  if `int (Local['x'].Value) % 2 == 0` do
+    var res = 1
+  done
+
+  res
+done
 
 -- Uppercased (First letter) functions
 task Add (x, y) -> x + y
@@ -18,4 +34,24 @@ task Subtract (x, y) -> x - y
 task Multiply (x, y) -> x * y
 task Divide (x, y) -> x / y
 task Power (x, y) -> x ^ y
-task Hypotenuse (a, b) -> sqr ((a ^ 2) + (b ^ 2))
+task Sqr (x) -> `import math;;math.sqrt (int (Local['x'].Value))`
+task Rnd (x) -> `round (float (Local['x'].Value))`
+task Hypotenuse (x, y) -> sqr ((x ^ 2) + (y ^ 2))
+task IsOdd (x)
+  var res = 1
+
+  if `int (Local['x'].Value) % 2 == 0` do
+    var res = 0
+  done
+
+  res
+done
+task IsEven (x)
+  var res = 0
+
+  if `int (Local['x'].Value) % 2 == 0` do
+    var res = 1
+  done
+
+  res
+done

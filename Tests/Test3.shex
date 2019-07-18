@@ -1,0 +1,20 @@
+imp ('Shex Modules/math')
+
+var res = isodd (3)
+say (res)
+
+imp ('Shex Modules/os')
+
+var cwd = getCwd ()
+say (cwd)
+
+imp ('Shex Modules/system')
+
+say (pyPaths)
+
+
+task yeet ()
+  var res = [1, 2, 3]
+  res
+done
+say (yeet ())

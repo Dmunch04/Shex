@@ -6,5 +6,8 @@ def Run (Path):
 
     Main.Run (Path, Data)
 
+def Test (Index):
+    Run (f'Tests/Test{str (Index)}.shex')
+
 # Run ('Path/To/File.shex')
-Run ('Test.shex')
+Test (3)

@@ -1,6 +1,0 @@
-object MyObject (x, y) -> ..
-MyObject.z = this.x + this.y
-MyObject.Function = task Function (a, b) -> this.c = a + b
-
-MyObject.Function (1, 2)
-print (MyObject.c)
