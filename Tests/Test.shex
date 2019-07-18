@@ -9,7 +9,7 @@ task test ()
   say (isnum (x))
   say (isstr (x))
 
-  imp ('../Shex Modules/math')
+  imp ('../Modules/math')
   say (Add (1, 2))
 
   say (sqr (100))

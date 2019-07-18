@@ -1,14 +1,14 @@
-imp ('Shex Modules/math')
+imp ('../Modules/math')
 
 var res = isodd (3)
 say (res)
 
-imp ('Shex Modules/os')
+imp ('../Modules/os')
 
 var cwd = getCwd ()
 say (cwd)
 
-imp ('Shex Modules/system')
+imp ('../Modules/system')
 
 say (pyPaths)
 
