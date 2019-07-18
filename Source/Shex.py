@@ -43,9 +43,14 @@ elif sys.platform == 'linux':
 # IMPORTS
 #######################################
 
-from Token import *
-from Position import Position
-from Error import IllegalCharError, ExpectedCharError, InvalidSyntaxError, RTError
+from Files.Token import *
+from Files.Nodes import *
+from Files.Position import Position
+from Files.Context import ShexContext
+from Files.RuntimeResult import RTResult
+from Files.SymbolTable import SymbolTable
+from Files.ParseResult import ParseResult
+from Files.Error import IllegalCharError, ExpectedCharError, InvalidSyntaxError, RTError
 
 import os
 import math
@@ -62,6 +67,167 @@ Digits = '0123456789'
 Letters = string.ascii_letters
 LettersDigits = Letters + Digits
 
+
+
+#######################################
+# ERRORS
+#######################################
+"""
+class Error:
+    def __init__ (self, StartPosition, EndPosition, Name, Error):
+        self.StartPosition = StartPosition
+        self.EndPosition = EndPosition
+        self.Name = Name
+        self.Error = Error
+
+    def AsString (self):
+        Result = f'{self.Name}: {self.Error}\n'
+        Result += f'File {self.StartPosition.FileName}, line {self.StartPosition.Line + 1}'
+        Result += '\n\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
+
+        return Result
+
+class IllegalCharError (Error):
+    def __init__ (self, StartPosition, EndPosition, Error):
+        super ().__init__ (StartPosition, EndPosition, 'Illegal Character', Error)
+
+class ExpectedCharError (Error):
+    def __init__ (self, StartPosition, EndPosition, Error):
+        super ().__init__ (StartPosition, EndPosition, 'Expected Character', Error)
+
+class InvalidSyntaxError (Error):
+    def __init__ (self, StartPosition, EndPosition, Error = ''):
+        super ().__init__ (StartPosition, EndPosition, 'Invalid Syntax', Error)
+
+class RTError (Error):
+    def __init__ (self, StartPosition, EndPosition, Error, Context):
+        super ().__init__ (StartPosition, EndPosition, 'Runtime Error', Error)
+
+        self.Context = Context
+
+    def AsString (self):
+        Result  = self.GenerateTraceback ()
+        Result += f'{self.Name}: {self.Error}'
+        Result += '\n\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
+
+        return Result
+
+    def GenerateTraceback (self):
+        Result = ''
+        Position = self.StartPosition
+        Context = self.Context
+
+        while Context:
+            Result = f'  File {Position.FileName}, line {str (Position.Line + 1)}, in {Context.DisplayName}\n' + Result
+            Position = Context.ParentEntryPos
+            Context = Context.Parent
+
+        return 'Traceback (most recent call last):\n' + Result
+"""
+
+
+#######################################
+# POSITION
+#######################################
+"""
+class Position:
+    def __init__ (self, Index, Line, Column, FileName, FileText):
+        self.Index = Index
+        self.Line = Line
+        self.Column = Column
+        self.FileName = FileName
+        self.FileText = FileText
+
+    def Advance (self, CurrentChar = None):
+        self.Index += 1
+        self.Column += 1
+
+        if CurrentChar == '\n':
+            self.Line += 1
+            self.Column = 0
+
+        return self
+
+    def Copy (self):
+        return Position (self.Index, self.Line, self.Column, self.FileName, self.FileText)
+"""
+
+
+#######################################
+# TOKENS
+#######################################
+"""
+TokenInt                    = 'INT'
+TokenFloat                  = 'FLOAT'
+TokenString                 = 'STRING'
+TokenIdentifier             = 'IDENTIFIER'
+TokenKeyword                = 'KEYWORD'
+TokenPlus                   = 'PLUS'
+TokenMinus                  = 'MINUS'
+TokenMultiply               = 'MUL'
+TokenDivide                 = 'DIV'
+TokenPower                  = 'POW'
+TokenModulo                 = 'MOD'
+TokenPlusAssign             = 'PLUSASSIGN'
+TokenMinusAssign            = 'MINUSASSIGN'
+TokenMultiplyAssign         = 'MULASSIGN'
+TokenDivideAssign           = 'DIVASSIGN'
+TokenPowerAssign            = 'POWASSIGN'
+TokenModuloAssign           = 'MODASSIGN'
+TokenEquals                 = 'EQ'
+TokenLeftParenthesis        = 'LPAREN'
+TokenRightParenthesis       = 'RPAREN'
+TokenLeftSquareBracket      = 'LSQUARE'
+TokenRightSquareBracket     = 'RSQUARE'
+TokenEqualsEquals           = 'EE'
+TokenNotEquals              = 'NE'
+TokenLessThan               = 'LT'
+TokenGreaterThan            = 'GT'
+TokenLessThanEquals         = 'LTE'
+TokenGreaterThanEquals      = 'GTE'
+TokenComma                  = 'COMMA'
+TokenArrow                  = 'ARROW'
+TokenNewline                = 'NEWLINE'
+TokenEmbed                  = 'EMBED'
+TokenConfig                 = 'CONFIG'
+TokenEndOfFile              = 'EOF'
+
+Keywords = {
+    'VAR': 'var',
+    'AND': 'and',
+    'OR': 'or',
+    'NOT': 'not',
+    'IF': 'if',
+    'ELIF': 'elif',
+    'ELSE': 'else',
+    'FOR': 'for',
+    'TO': 'to',
+    'STEP': 'step',
+    'WHILE': 'while',
+    'TASK': 'task',
+    'DO': 'do',
+    'DONE': 'done'
+}
+
+class Token:
+    def __init__ (self, Type, Value = None, StartPosition = None, EndPosition = None):
+        self.Type = Type
+        self.Value = Value
+
+        if StartPosition:
+            self.StartPosition = StartPosition.Copy ()
+            self.EndPosition = StartPosition.Copy ()
+            self.EndPosition.Advance ()
+
+        if EndPosition:
+            self.EndPosition = EndPosition.Copy ()
+
+    def Matches (self, Type, Value):
+        return self.Type == Type and self.Value == Value
+
+    def __repr__ (self):
+        return f'{self.Type}:{self.Value}' if self.Value else f'{self.Type}'
+"""
 
 
 #######################################
@@ -410,7 +576,7 @@ class ShexLexer:
 #######################################
 # NODES
 #######################################
-
+"""
 class NumberNode:
     def __init__ (self, Token):
         self.Token = Token
@@ -555,13 +721,13 @@ class CallNode:
 
         else:
             self.EndPosition = NodeToCall.EndPosition
-
+"""
 
 
 #######################################
 # PARSE RESULT
 #######################################
-
+"""
 class ParseResult:
     def __init__ (self):
         self.Error = None
@@ -601,7 +767,7 @@ class ParseResult:
             self.Error = Error
 
         return self
-
+"""
 
 
 #######################################
@@ -1484,7 +1650,7 @@ class ShexParser:
 #######################################
 # RUNTIME RESULT
 #######################################
-
+"""
 class RTResult:
     def __init__ (self):
         self.Value = None
@@ -1504,7 +1670,7 @@ class RTResult:
         self.Error = Error
 
         return self
-
+"""
 
 
 #######################################
@@ -2541,20 +2707,21 @@ BuiltInFunction.Round       = BuiltInFunction ('Round')
 #######################################
 # CONTEXT
 #######################################
-
+"""
 class ShexContext:
     def __init__ (self, DisplayName, Parent = None, ParentEntryPosition = None):
         self.DisplayName = DisplayName
         self.Parent = Parent
         self.ParentEntryPosition = ParentEntryPosition
         self.SymbolTable = None
+"""
 
 
 
 #######################################
 # SYMBOL TABLE
 #######################################
-
+"""
 class SymbolTable:
     def __init__ (self, Parent = None):
         self.Symbols = {}
@@ -2573,7 +2740,7 @@ class SymbolTable:
 
     def Remove (self, Name):
         del self.Symbols[Name]
-
+"""
 
 
 #######################################
