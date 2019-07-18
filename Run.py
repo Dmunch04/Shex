@@ -10,4 +10,4 @@ def Test (Index):
     Run (f'Tests/Test{str (Index)}.shex')
 
 # Run ('Path/To/File.shex')
-Test (3)
+Test (5)

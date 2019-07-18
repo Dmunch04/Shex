@@ -1,3 +1,8 @@
+#
+# TODO: Fix the config things: %%IF yeet;
+# TODO: Also fix: <= >= += -= *= /= ^= %=
+#
+
 ########################################
 #            Rewritten from:           #
 #  https://github.com/davidcallanan/   #
@@ -38,7 +43,9 @@ elif sys.platform == 'linux':
 # IMPORTS
 #######################################
 
-from Errors import *
+from Token import *
+from Position import Position
+from Error import IllegalCharError, ExpectedCharError, InvalidSyntaxError, RTError
 
 import os
 import math
@@ -54,159 +61,6 @@ from DavesLogger import Logs
 Digits = '0123456789'
 Letters = string.ascii_letters
 LettersDigits = Letters + Digits
-
-
-
-#######################################
-# ERRORS
-#######################################
-
-class Error:
-    def __init__ (self, StartPosition, EndPosition, Name, Error):
-        self.StartPosition = StartPosition
-        self.EndPosition = EndPosition
-        self.Name = Name
-        self.Error = Error
-
-    def AsString (self):
-        Result = f'{self.Name}: {self.Error}\n'
-        Result += f'File {self.StartPosition.FileName}, line {self.StartPosition.Line + 1}'
-        Result += '\n\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
-
-        return Result
-
-class IllegalCharError (Error):
-    def __init__ (self, StartPosition, EndPosition, Error):
-        super ().__init__ (StartPosition, EndPosition, 'Illegal Character', Error)
-
-class ExpectedCharError (Error):
-    def __init__ (self, StartPosition, EndPosition, Error):
-        super ().__init__ (StartPosition, EndPosition, 'Expected Character', Error)
-
-class InvalidSyntaxError (Error):
-    def __init__ (self, StartPosition, EndPosition, Error = ''):
-        super ().__init__ (StartPosition, EndPosition, 'Invalid Syntax', Error)
-
-class RTError (Error):
-    def __init__ (self, StartPosition, EndPosition, Error, Context):
-        super ().__init__ (StartPosition, EndPosition, 'Runtime Error', Error)
-
-        self.Context = Context
-
-    def AsString (self):
-        Result  = self.GenerateTraceback ()
-        Result += f'{self.Name}: {self.Error}'
-        Result += '\n\n' + StringWithArrows (self.StartPosition.FileText, self.StartPosition, self.EndPosition)
-
-        return Result
-
-    def GenerateTraceback (self):
-        Result = ''
-        Position = self.StartPosition
-        Context = self.Context
-
-        while Context:
-            Result = f'  File {Position.FileName}, line {str (Position.Line + 1)}, in {Context.DisplayName}\n' + Result
-            Position = Context.ParentEntryPos
-            Context = Context.Parent
-
-        return 'Traceback (most recent call last):\n' + Result
-
-
-
-#######################################
-# POSITION
-#######################################
-
-class Position:
-    def __init__ (self, Index, Line, Column, FileName, FileText):
-        self.Index = Index
-        self.Line = Line
-        self.Column = Column
-        self.FileName = FileName
-        self.FileText = FileText
-
-    def Advance (self, CurrentChar = None):
-        self.Index += 1
-        self.Column += 1
-
-        if CurrentChar == '\n':
-            self.Line += 1
-            self.Column = 0
-
-        return self
-
-    def Copy (self):
-        return Position (self.Index, self.Line, self.Column, self.FileName, self.FileText)
-
-
-
-#######################################
-# TOKENS
-#######################################
-
-TokenInt                    = 'INT'
-TokenFloat                  = 'FLOAT'
-TokenString                 = 'STRING'
-TokenIdentifier             = 'IDENTIFIER'
-TokenKeyword                = 'KEYWORD'
-TokenPlus                   = 'PLUS'
-TokenMinus                  = 'MINUS'
-TokenMultiply               = 'MUL'
-TokenDivide                 = 'DIV'
-TokenPower                  = 'POW'
-TokenEquals                 = 'EQ'
-TokenLeftParenthesis        = 'LPAREN'
-TokenRightParenthesis       = 'RPAREN'
-TokenLeftSquareBracket      = 'LSQUARE'
-TokenRightSquareBracket     = 'RSQUARE'
-TokenEqualsEquals           = 'EE'
-TokenNotEquals              = 'NE'
-TokenLessThan               = 'LT'
-TokenGreaterThan            = 'GT'
-TokenLessThanEquals         = 'LTE'
-TokenGreaterThanEquals      = 'GTE'
-TokenComma                  = 'COMMA'
-TokenArrow                  = 'ARROW'
-TokenNewline                = 'NEWLINE'
-TokenEmbed                  = 'EMBED'
-TokenEndOfFile              = 'EOF'
-
-Keywords = [
-    'var',
-    'and',
-    'or',
-    'not',
-    'if',
-    'elif',
-    'else',
-    'for',
-    'to',
-    'step',
-    'while',
-    'task',
-    'do',
-    'done'
-]
-
-class Token:
-    def __init__ (self, Type, Value = None, StartPosition = None, EndPosition = None):
-        self.Type = Type
-        self.Value = Value
-
-        if StartPosition:
-            self.StartPosition = StartPosition.Copy ()
-            self.EndPosition = StartPosition.Copy ()
-            self.EndPosition.Advance ()
-
-        if EndPosition:
-            self.EndPosition = EndPosition.Copy ()
-
-    def Matches (self, Type, Value):
-        return self.Type == Type and self.Value == Value
-
-    def __repr__ (self):
-        return f'{self.Type}:{self.Value}' if self.Value else f'{self.Type}'
 
 
 
@@ -250,24 +104,23 @@ class ShexLexer:
             elif self.CurrentChar == '`':
                 Tokens.append (self.MakeEmbed ())
 
+            elif self.CurrentChar == '%':
+                Tokens.append (self.MakeModulo ())
+
             elif self.CurrentChar == '+':
-                Tokens.append (Token (TokenPlus, StartPosition = self.Position))
-                self.Advance ()
+                Tokens.append (self.MakePlus ())
 
             elif self.CurrentChar == '-':
-                Tokens.append (self.MakeMinusOrArrow ())
+                Tokens.append (self.MakeMinus ())
 
             elif self.CurrentChar == '*':
-                Tokens.append (Token (TokenMultiply, StartPosition = self.Position))
-                self.Advance ()
+                Tokens.append (self.MakeMultiply ())
 
             elif self.CurrentChar == '/':
-                Tokens.append (Token (TokenDivide, StartPosition = self.Position))
-                self.Advance ()
+                Tokens.append (self.MakeDivide ())
 
             elif self.CurrentChar == '^':
-                Tokens.append (Token (TokenPower, StartPosition = self.Position))
-                self.Advance ()
+                Tokens.append (self.MakePower ())
 
             elif self.CurrentChar == '(':
                 Tokens.append (Token (TokenLeftParenthesis, StartPosition = self.Position))
@@ -390,6 +243,32 @@ class ShexLexer:
 
         return Token (TokenEmbed, Embed, StartPosition, self.Position)
 
+    def MakeModulo (self):
+        TokenType = TokenModulo
+        StartPosition = self.Position.Copy ()
+
+        self.Advance ()
+
+        if self.CurrentChar == '%':
+            self.Advance ()
+
+            TokenType = TokenConfig
+            Config = ''
+
+            while self.CurrentChar != None and self.CurrentChar != ';':
+                Config += self.CurrentChar
+
+                self.Advance ()
+
+            return Token (TokenType, Config, StartPosition = StartPosition, EndPosition = self.Position)
+
+        elif self.CurrentChar == '=':
+            self.Advance ()
+
+            TokenType = TokenModuloAssign
+
+        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
+
     def MakeIdentifier (self):
         ID = ''
         StartPosition = self.Position.Copy ()
@@ -399,11 +278,24 @@ class ShexLexer:
 
             self.Advance ()
 
-        TokenType = TokenKeyword if ID in Keywords else TokenIdentifier
+        TokenType = TokenKeyword if ID in list (Keywords.values ()) else TokenIdentifier
 
         return Token (TokenType, ID, StartPosition, self.Position)
 
-    def MakeMinusOrArrow (self):
+    def MakePlus (self):
+        TokenType = TokenPlus
+        StartPosition = self.Position.Copy ()
+
+        self.Advance ()
+
+        if self.CurrentChar == '=':
+            self.Advance ()
+
+            TokenType = TokenPlusAssign
+
+        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
+
+    def MakeMinus (self):
         TokenType = TokenMinus
         StartPosition = self.Position.Copy ()
 
@@ -413,6 +305,50 @@ class ShexLexer:
             self.Advance ()
 
             TokenType = TokenArrow
+
+        elif self.CurrentChar == '=':
+            self.Advance ()
+
+            TokenType = TokenMinusAssign
+
+        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
+
+    def MakeMultiply (self):
+        TokenType = TokenMultiply
+        StartPosition = self.Position.Copy ()
+
+        self.Advance ()
+
+        if self.CurrentChar == '=':
+            self.Advance ()
+
+            TokenType = TokenMultiplyAssign
+
+        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
+
+    def MakeDivide (self):
+        TokenType = TokenDivide
+        StartPosition = self.Position.Copy ()
+
+        self.Advance ()
+
+        if self.CurrentChar == '=':
+            self.Advance ()
+
+            TokenType = TokenDivideAssign
+
+        return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
+
+    def MakePower (self):
+        TokenType = TokenPower
+        StartPosition = self.Position.Copy ()
+
+        self.Advance ()
+
+        if self.CurrentChar == '=':
+            self.Advance ()
+
+            TokenType = TokenPowerAssign
 
         return Token (TokenType, StartPosition = StartPosition, EndPosition = self.Position)
 
@@ -496,6 +432,16 @@ class StringNode:
         return f'{self.Token}'
 
 class EmbedNode:
+    def __init__ (self, Token):
+        self.Token = Token
+
+        self.StartPosition = Token.StartPosition
+        self.EndPosition = Token.EndPosition
+
+    def __repr__ (self):
+        return f'{self.Token}'
+
+class ConfigNode:
     def __init__ (self, Token):
         self.Token = Token
 
@@ -693,7 +639,7 @@ class ShexParser:
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected '+', '-', '*', '/', '^', '==', '!=', '<', '>', <=', '>=', 'AND' or 'OR'"
+                f"Expected '+', '-', '*', '/', '^', '%', '+=', '-=', '*=', '/=', '^=', '%=', '==', '!=', '<', '>', <=', '>=', '{Keywords['AND']}' or '{Keywords['OR']}'"
             ))
 
         return Result
@@ -708,6 +654,21 @@ class ShexParser:
             self.Advance ()
 
         Statement = Result.Register (self.Expr ())
+
+        # ========================================
+        # ||              Okay so               ||
+        # ||       I have no idea if this       ||
+        # ||       is a good idea. I just       ||
+        # ||   do it because it kind of works   ||
+        # ||     like it changes it, so ye      ||
+        # ||    and I just have this message    ||
+        # ||     so I can spot this easier.     ||
+        # ========================================
+        #if Statement.Token.Type == TokenConfig:
+            #Name, Value = Statement.Token.Value.split (' ')
+
+            #if Name in Keywords:
+                #Keywords[Name] = Value
 
         if Result.Error:
             return Result
@@ -751,7 +712,7 @@ class ShexParser:
     def Expr (self):
         Result = ParseResult ()
 
-        if self.CurrentToken.Matches (TokenKeyword, 'var'):
+        if self.CurrentToken.Matches (TokenKeyword, Keywords['VAR']):
             Result.RegisterAdvancement ()
             self.Advance ()
 
@@ -790,7 +751,7 @@ class ShexParser:
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'var', 'if', 'for', 'while', 'task', int, float, identifier, '+', '-', '(', '[' or 'not'"
+                f"Expected '{Keywords['VAR']}', '{Keywords['IF']}', '{Keywords['FOR']}', '{Keywords['WHILE']}', '{Keywords['TASK']}', int, float, identifier, '+', '-', '(', '[' or '{Keywords['NOT']}'"
             ))
 
         return Result.Success (Node)
@@ -798,7 +759,7 @@ class ShexParser:
     def CompExpr (self):
         Result = ParseResult ()
 
-        if self.CurrentToken.Matches (TokenKeyword, 'not'):
+        if self.CurrentToken.Matches (TokenKeyword, Keywords['NOT']):
             OperatorToken = self.CurrentToken
 
             Result.RegisterAdvancement ()
@@ -817,7 +778,7 @@ class ShexParser:
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected int, float, identifier, '+', '-', '(', '[', 'IF', 'FOR', 'WHILE', 'FUN' or 'NOT'"
+                f"Expected int, float, identifier, '+', '-', '(', '[', '{Keywords['IF']}', '{Keywords['FOR']}', '{Keywords['WHILE']}', '{Keywords['TASK']}' or '{Keywords['NOT']}'"
             ))
 
         return Result.Success (Node)
@@ -872,7 +833,7 @@ class ShexParser:
                     return Result.Failure (InvalidSyntaxError (
                         self.CurrentToken.StartPosition,
                         self.CurrentToken.EndPosition,
-                        "Expected ')', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
+                        f"Expected ')', '{Keywords['VAR']}', '{Keywords['IF']}', '{Keywords['FOR']}', '{Keywords['WHILE']}', '{Keywords['TASK']}', int, float, identifier, '+', '-', '(', '[' or '{Keywords['NOT']}'"
                     ))
 
                 while self.CurrentToken.Type == TokenComma:
@@ -920,6 +881,12 @@ class ShexParser:
 
             return Result.Success (EmbedNode (Token))
 
+        elif Token.Type == TokenConfig:
+            Result.RegisterAdvancement ()
+            self.Advance ()
+
+            return Result.Success (ConfigNode (Token))
+
         elif Token.Type == TokenIdentifier:
             Result.RegisterAdvancement ()
             self.Advance ()
@@ -956,7 +923,7 @@ class ShexParser:
 
             return Result.Success (ListExpr)
 
-        elif Token.Matches (TokenKeyword, 'if'):
+        elif Token.Matches (TokenKeyword, Keywords['IF']):
             IfExpr = Result.Register (self.IfExpr ())
 
             if Result.Error:
@@ -964,7 +931,7 @@ class ShexParser:
 
             return Result.Success (IfExpr)
 
-        elif Token.Matches (TokenKeyword, 'for'):
+        elif Token.Matches (TokenKeyword, Keywords['FOR']):
             ForExpr = Result.Register (self.ForExpr ())
 
             if Result.Error:
@@ -972,7 +939,7 @@ class ShexParser:
 
             return Result.Success (ForExpr)
 
-        elif Token.Matches (TokenKeyword, 'while'):
+        elif Token.Matches (TokenKeyword, Keywords['WHILE']):
             WhileExpr = Result.Register (self.WhileExpr ())
 
             if Result.Error:
@@ -980,7 +947,7 @@ class ShexParser:
 
             return Result.Success (WhileExpr)
 
-        elif Token.Matches (TokenKeyword, 'task'):
+        elif Token.Matches (TokenKeyword, Keywords['TASK']):
             FunctionDefinition = Result.Register (self.FunctionDefinition ())
 
             if Result.Error:
@@ -991,7 +958,7 @@ class ShexParser:
         return Result.Failure (InvalidSyntaxError (
             Token.StartPosition,
             Token.EndPosition,
-            "Expected int, float, identifier, '+', '-', '(', '[', IF', 'FOR', 'WHILE', 'FUN'"
+            f"Expected int, float, identifier, '+', '-', '(', '[', '{Keywords['IF']}', '{Keywords['FOR']}', 'Keywords['WHILE']', 'Keywords['TASK']'"
         ))
 
     def ListExpr(self):
@@ -1018,9 +985,9 @@ class ShexParser:
 
             if Result.Error:
                 return Result.Failure (InvalidSyntaxError (
-                  self.CurrentToken.StartPosition,
-                  self.CurrentToken.EndPosition,
-                  "Expected ']', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
+                    self.CurrentToken.StartPosition,
+                    self.CurrentToken.EndPosition,
+                    f"Expected ']', '{Keywords['VAR']}', 'Keywords['IF']', 'Keywords['FOR']', 'Keywords['WHILE']', 'Keywords['TASK']', int, float, identifier, '+', '-', '(', '[' or 'Keywords['NOT']'"
                 ))
 
             while self.CurrentToken.Type == TokenComma:
@@ -1050,7 +1017,7 @@ class ShexParser:
 
     def IfExpr (self):
         Result = ParseResult ()
-        AllCases = Result.Register (self.IfExprCases ('if'))
+        AllCases = Result.Register (self.IfExprCases (Keywords['IF']))
 
         if Result.Error:
             return Result
@@ -1060,13 +1027,13 @@ class ShexParser:
         return Result.Success (IfNode (Cases, ElseCase))
 
     def IfExprB (self):
-        return self.IfExprCases ('elif')
+        return self.IfExprCases (Keywords['ELIF'])
 
     def IfExprC (self):
         Result = ParseResult ()
         ElseCase = None
 
-        if self.CurrentToken.Matches (TokenKeyword, 'else'):
+        if self.CurrentToken.Matches (TokenKeyword, Keywords['ELSE']):
             Result.RegisterAdvancement ()
             self.Advance ()
 
@@ -1081,7 +1048,7 @@ class ShexParser:
 
                 ElseCase = (Statements, True)
 
-                if self.CurrentToken.Matches (TokenKeyword, 'done'):
+                if self.CurrentToken.Matches (TokenKeyword, Keywords['DONE']):
                     Result.RegisterAdvancement ()
                     self.Advance ()
 
@@ -1089,7 +1056,7 @@ class ShexParser:
                     return Result.Failure (InvalidSyntaxError (
                         self.CurrentToken.StartPosition,
                         self.CurrentToken.EndPosition,
-                        "Expected 'done'"
+                        f"Expected '{Keywords['DONE']}'"
                     ))
 
             else:
@@ -1107,7 +1074,7 @@ class ShexParser:
         Cases = []
         ElseCase = None
 
-        if self.CurrentToken.Matches (TokenKeyword, 'elif'):
+        if self.CurrentToken.Matches (TokenKeyword, Keywords['ELIF']):
             AllCases = Result.Register (self.IfExprB ())
 
             if Result.Error:
@@ -1132,7 +1099,7 @@ class ShexParser:
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                f"Expected '{case_keyword}'"
+                f"Expected '{CaseKeyword}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1143,11 +1110,11 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'do'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['DO']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'do'"
+                f"Expected '{Keywords['DO']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1164,7 +1131,7 @@ class ShexParser:
 
             Cases.append ((Condition, Statements, True))
 
-            if self.CurrentToken.Matches (TokenKeyword, 'done'):
+            if self.CurrentToken.Matches (TokenKeyword, Keywords['DONE']):
                 Result.RegisterAdvancement ()
                 self.Advance ()
 
@@ -1198,11 +1165,11 @@ class ShexParser:
     def ForExpr (self):
         Result = ParseResult ()
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'for'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['FOR']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'for'"
+                f"Expected '{Keywords['FOR']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1235,11 +1202,11 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'to'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['TO']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'to'"
+                f"Expected '{Keywords['TO']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1250,7 +1217,7 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if self.CurrentToken.Matches (TokenKeyword, 'step'):
+        if self.CurrentToken.Matches (TokenKeyword, Keywords['STEP']):
             Result.RegisterAdvancement ()
             self.Advance ()
 
@@ -1262,11 +1229,11 @@ class ShexParser:
         else:
             StepValue = None
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'do'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['DO']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'do'"
+                f"Expected '{Keywords['DO']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1281,11 +1248,11 @@ class ShexParser:
             if Result.Error:
                 return Result
 
-            if not self.CurrentToken.Matches (TokenKeyword, 'done'):
+            if not self.CurrentToken.Matches (TokenKeyword, Keywords['DONE']):
                 return Result.Failure (InvalidSyntaxError (
                     self.CurrentToken.StartPosition,
                     self.CurrentToken.EndPosition,
-                    "Expected 'done'"
+                    f"Expected '{Keywords['DONE']}'"
                 ))
 
             Result.RegisterAdvancement ()
@@ -1303,11 +1270,11 @@ class ShexParser:
     def WhileExpr (self):
         Result = ParseResult ()
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'while'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['WHILE']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'while'"
+                f"Expected '{Keywords['WHILE']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1318,11 +1285,11 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'do'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['DO']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'do'"
+                f"Expected '{Keywords['DO']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1337,11 +1304,11 @@ class ShexParser:
             if Result.Error:
                 return Result
 
-            if not self.CurrentToken.Matches (TokenKeyword, 'done'):
+            if not self.CurrentToken.Matches (TokenKeyword, Keywords['DONE']):
                 return Result.Failure (InvalidSyntaxError (
                     self.CurrentToken.StartPosition,
                     self.CurrentToken.EndPosition,
-                    "Expected 'done'"
+                    f"Expected '{Keywords['DONE']}'"
                 ))
 
             Result.RegisterAdvancement ()
@@ -1359,11 +1326,11 @@ class ShexParser:
     def FunctionDefinition (self):
         Result = ParseResult ()
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'task'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['TASK']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'task'"
+                f"Expected '{Keywords['TASK']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1468,11 +1435,11 @@ class ShexParser:
         if Result.Error:
             return Result
 
-        if not self.CurrentToken.Matches (TokenKeyword, 'done'):
+        if not self.CurrentToken.Matches (TokenKeyword, Keywords['DONE']):
             return Result.Failure (InvalidSyntaxError (
                 self.CurrentToken.StartPosition,
                 self.CurrentToken.EndPosition,
-                "Expected 'done'"
+                f"Expected '{Keywords['DONE']}'"
             ))
 
         Result.RegisterAdvancement ()
@@ -1575,6 +1542,27 @@ class Value:
     def PoweredBy (self, Other):
         return None, self.IllegalOperation (Other)
 
+    def ModulodBy (self, Other):
+        return None, self.IllegalOperation (Other)
+
+    def AddedToAssign (self, Other):
+        return None, self.IllegalOperation (Other)
+
+    def SubtractedByAssign (self, Other):
+        return None, self.IllegalOperation (Other)
+
+    def MultipliedByAssign (self, Other):
+        return None, self.IllegalOperation (Other)
+
+    def DividedByAssign (self, Other):
+        return None, self.IllegalOperation (Other)
+
+    def PoweredByAssign (self, Other):
+        return None, self.IllegalOperation (Other)
+
+    def ModulodByAssign (self, Other):
+        return None, self.IllegalOperation (Other)
+
     def GetComparisonEqual (self, Other):
         return None, self.IllegalOperation (Other)
 
@@ -1668,6 +1656,67 @@ class Number (Value):
     def PoweredBy (self, Other):
         if isinstance (Other, Number):
             return Number (self.Value ** Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def ModulodBy (self, Other):
+        if isinstance (Other, Number):
+            return Number (self.Value % Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def AddedToAssign (self, Other):
+        if isinstance (Other, Number):
+            self.Value += Other.Value
+
+            return Number (self.Value + Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def SubtractedByAssign (self, Other):
+        if isinstance (Other, Number):
+            self.Value -= Other.Value
+
+            return Number (self.Value - Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def MultipliedByAssign (self, Other):
+        if isinstance (Other, Number):
+            self.Value *= Other.Value
+
+            return Number (self.Value * Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def DividedByAssign (self, Other):
+        if isinstance (Other, Number):
+            self.Value /= Other.Value
+
+            return Number (self.Value / Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def PoweredByAssign (self, Other):
+        if isinstance (Other, Number):
+            self.Value **= Other.Value
+
+            return Number (self.Value ** Other.Value).SetContext (self.Context), None
+
+        else:
+            return None, Value.IllegalOperation (self, Other)
+
+    def ModulodByAssign (self, Other):
+        if isinstance (Other, Number):
+            self.Value %= Other.Value
+
+            return Number (self.Value % Other.Value).SetContext (self.Context), None
 
         else:
             return None, Value.IllegalOperation (self, Other)
@@ -2600,6 +2649,18 @@ class ShexInterpreter:
                 List (Check (Result)).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
             )
 
+    def VisitConfigNode (self, Node, Context):
+        Name, Value = Node.Token.Value.split (' ')
+
+        if Name in Keywords:
+            Keywords[Name] = str (Value)
+
+        #print (123, Keywords)
+
+        return RTResult ().Success (
+            Number (Number.Null).SetContext (Context).SetPosition (Node.StartPosition, Node.EndPosition)
+        )
+
     def VisitListNode (self, Node, Context):
         Result = RTResult ()
         Elements = []
@@ -2668,6 +2729,24 @@ class ShexInterpreter:
 
         elif Node.OperatorToken.Type == TokenPower:
             _Result, Error = Left.PoweredBy (Right)
+
+        elif Node.OperatorToken.Type == TokenModulo:
+            _Result, Error = Left.ModulodBy (Right)
+
+        elif Node.OperatorToken.Type == TokenMinusAssign:
+            _Result, Error = Left.SubtractedByAssign (Right)
+
+        elif Node.OperatorToken.Type == TokenMultiplyAssign:
+            _Result, Error = Left.MultipliedByAssign (Right)
+
+        elif Node.OperatorToken.Type == TokenDivideAssign:
+            _Result, Error = Left.DividedByAssign (Right)
+
+        elif Node.OperatorToken.Type == TokenPowerAssign:
+            _Result, Error = Left.PoweredByAssign (Right)
+
+        elif Node.OperatorToken.Type == TokenPlusAssign:
+            _Result, Error = Left.ModulodByAssign (Right)
 
         elif Node.OperatorToken.Type == TokenEqualsEquals:
             _Result, Error = Left.GetComparisonEqual (Right)
