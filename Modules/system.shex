@@ -1,9 +1,0 @@
--- Import with: imp ('system')
-
--- Lowercased functions
-var pyPaths = `import sys;;sys.path`
-task check (x) -> if x > 0 do say (true) else say (false)
-
--- Uppercased (First letter) functions
-var PyPaths = `import sys;;sys.path`
-task Check (x) -> if x > 0 do say (true) else say (false)

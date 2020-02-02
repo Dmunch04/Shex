@@ -1,7 +1,0 @@
--- STATUS: UNSOLVED
-
-var int = 5
-
-if int >= 5 do
-  say ('yeet!')
-done

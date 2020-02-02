@@ -1,8 +1,0 @@
-imp ('math.shex')
-
-var a = add (1, 2)
-var b = add (3, 4)
-var c = add (a, b)
-
-
-say (c)

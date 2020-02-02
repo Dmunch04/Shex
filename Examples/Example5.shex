@@ -1,7 +1,0 @@
-var text = "Hello World 1 2 3"
-
-var splitted = split (text, ' ')
-say (splitted)
-
-var joined = join (splitted, ', ')
-say (joined)

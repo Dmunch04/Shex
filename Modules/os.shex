@@ -1,7 +1,0 @@
--- Import with: imp ('os')
-
--- Lowercased functions
-task getCwd () -> `import os;;os.getcwd ()`
-
--- Uppercased (First letter) functions
-task GetCwd () -> `import os;;os.getcwd ()`

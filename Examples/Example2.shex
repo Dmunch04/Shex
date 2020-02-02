@@ -1,1 +1,0 @@
-task Test (x) -> if x do say (x) else say ('Whoops')
