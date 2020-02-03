@@ -49,8 +49,8 @@ public class Shex
 
             // Multiline Error Test Case 2:
             // Status: Not Passed
-            RunCode ("aaa\nyeet\noof\ngg"); // columns = 15
-            Error (new UnexpectedCharacterError (new Location (2, 4, 6, 12), '\0'));
+            RunCode ("aadaa\nyeewft\noofsff\ngadfg\nawifj"); // columns = 15
+            Error (new UnexpectedCharacterError (new Location (2, 5, 2, 2), '\0'));
         }
     }
 
