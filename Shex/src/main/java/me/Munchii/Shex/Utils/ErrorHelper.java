@@ -5,7 +5,6 @@ import me.Munchii.Shex.Tokens.Location;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.IntStream;
 
 public class ErrorHelper
 {
@@ -36,6 +35,21 @@ public class ErrorHelper
         for (int LineIndex = StartLine; LineIndex <= EndLine; LineIndex++)
         {
             String Line = Lexer.GetLine (LineIndex - 1);
+            System.out.println(Line);
+
+            String Start = '\t' + Color.Reset.GetANSICode () + Color.Make256Color (60) + LineIndex + Color.Reset.GetANSICode () + " | ";
+            if (LineIndex == StartLine) {
+                // Get other string
+                Lines.append(Start + Line.substring(0, StartColumn) + Color.Reset.GetANSICode () + Color.BoldRed.GetANSICode ());
+                Lines.append(Line.substring(StartColumn));
+                Lines.append("\n");
+            } else if (LineIndex > StartLine && LineIndex < EndLine-1) {
+                Lines.append(Start + Color.BoldRed.GetANSICode () + Line);
+                Lines.append("\n");
+            } else if (LineIndex == EndLine-1) {
+                Lines.append(Start + Color.Reset.GetANSICode () + Color.BoldRed.GetANSICode () + Line.substring(0, EndColumn) + Color.Reset.GetANSICode ());
+                Lines.append(Line.substring(EndColumn));
+            }
 
             // TODO: Actually get this to work. I can't seem to normalize/fit the original given start and end columns to the current line
 

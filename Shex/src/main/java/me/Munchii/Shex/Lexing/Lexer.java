@@ -251,7 +251,11 @@ public class Lexer
 
     public static String GetLine (int LineIndex)
     {
-        return SourceCopy.split ("\n")[LineIndex];
+        try {
+            return SourceCopy.split ("\n")[LineIndex];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            return null;
+        }
     }
 
 }
