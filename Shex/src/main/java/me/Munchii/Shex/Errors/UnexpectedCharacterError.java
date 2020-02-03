@@ -1,9 +1,12 @@
 package me.Munchii.Shex.Errors;
 
 import me.Munchii.Shex.Lexing.Lexer;
+import me.Munchii.Shex.Shex;
 import me.Munchii.Shex.Tokens.Location;
 import me.Munchii.Shex.Utils.Color;
 import me.Munchii.Shex.Utils.ErrorHelper;
+
+import java.util.stream.IntStream;
 
 public class UnexpectedCharacterError extends Error
 {
@@ -24,15 +27,16 @@ public class UnexpectedCharacterError extends Error
     @Override
     public String toString ()
     {
-        String Line = Lexer.GetLine (Position.GetStartLine () - 1);
-        String FirstLine = Line.substring (0, Position.GetStartColumn ());
-        String LastLine = Line.substring (Position.GetEndColumn ());
+        String Lines = ErrorHelper.MakeLines (Position);
 
-        String FixedLine = Color.Make256Color (245) + FirstLine + Color.Reset.GetANSICode () + Color.Bold.GetANSICode () + Value + Color.Reset.GetANSICode () + Color.Make256Color (245) + LastLine;
+        StringBuilder LinesAmount = new StringBuilder ();
+        LinesAmount.append (Position.GetStartLine ());
+        if (!(Position.GetStartLine () == Position.GetEndLine ())) LinesAmount.append ("-" + Position.GetEndLine ());
 
-        return Color.BoldRed.GetANSICode () + Error + Color.Reset.GetANSICode () + " " + Color.Red.GetANSICode () + Description + ": '" + Value + "'" + '\n' +
-                Color.Reset.GetANSICode () + Color.Red.GetANSICode () + Position.GetStartLine () + " | " + Color.Reset + FixedLine + '\n' +
-                Color.Make256Color (245) + ErrorHelper.MakeArrow (Position.GetEndColumn () + (String.valueOf (Position.GetStartLine ()).length () + 3)) + Color.Reset;
+        return Color.BoldRed.GetANSICode () + Color.Underline.GetANSICode () + Error + Color.Reset.GetANSICode () + '\n' + '\n' +
+                '\t' + Color.Reset.GetANSICode () + Description + ": '" + Value + "'" + '\n' +
+                '\t' + Color.Reset.GetANSICode () + Color.Make256Color (60) + Shex.GetPath () + ":" + LinesAmount.toString () + '\n' + '\n' +
+                Lines;
     }
 
 }

@@ -1,7 +1,9 @@
 package me.Munchii.Shex;
 
 import me.Munchii.Shex.Errors.Error;
+import me.Munchii.Shex.Errors.UnexpectedCharacterError;
 import me.Munchii.Shex.Lexing.Lexer;
+import me.Munchii.Shex.Tokens.Location;
 import me.Munchii.Shex.Tokens.Token;
 import me.Munchii.Shex.Utils.Color;
 
@@ -15,10 +17,12 @@ public class Shex
 {
 
     private String[] Args;
+    private static String[] ArgsCopy;
 
     public Shex (String[] Args) throws IOException
     {
         this.Args = Args;
+        ArgsCopy = Args;
 
         if (Args.length > 1)
         {
@@ -35,9 +39,18 @@ public class Shex
         {
             // Testing:
             //RunCode ("\"Hello, World!\" 1234 12.34 \n or hel\nlo");
-            RunCode ("task Test (x, y) do say (x + y) done");
+            //RunCode ("task Test (x, y) do say (x + y) done");
             //RunCode ("'Hello, World!");
-            //RunCode ("aaa \\ yeet");
+
+            // Multiline Error Test Case 1:
+            // Status: Not Passed
+            //RunCode ("aaa\nyeet\noof"); // columns = 12
+            //Error (new UnexpectedCharacterError (new Location (2, 3, 6, 10), '\0'));
+
+            // Multiline Error Test Case 2:
+            // Status: Not Passed
+            RunCode ("aaa\nyeet\noof\ngg"); // columns = 15
+            Error (new UnexpectedCharacterError (new Location (2, 4, 6, 12), '\0'));
         }
     }
 
@@ -63,6 +76,16 @@ public class Shex
     {
         Exception.Print ();
         System.exit (65);
+    }
+
+    public static String GetPath ()
+    {
+        if (ArgsCopy.length < 1)
+        {
+            return "/Testing/Test/Case.shex";
+        }
+
+        return ArgsCopy[0];
     }
 
 }
